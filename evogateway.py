@@ -422,7 +422,8 @@ def cleanup_display_text(msg, display_text):
 
 def process_gwy_message(msg, prev_msg=None) -> None:
     """ Process received ramses_rf message from Gateway """
-
+    #if not hasattr(msg, 'rssi'):
+    #    setattr(msg,'rssi',int(msg._pkt.rssi))
     log.debug("") # spacer, as we have other debug entries for a given received msg
     log.info(msg)  # Log event to file
 
