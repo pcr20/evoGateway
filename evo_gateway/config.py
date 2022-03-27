@@ -199,7 +199,7 @@ class Message():
     try:
         self.payload_length = int(rawmsg[46 + offset: 49 + offset])    # Note this is not +HEX...
     except Exception as e:
-        print ("Error instantiating Message class on line '{}':  {}. Raw msg: '{}'. length = {}".format(sys.exc_info()[-1].tb_lineno, str(e), rawmsg, +len(rawmsg)))
+        print ("Error instantiating Message class on line '{}':  {}. Raw msg: '{}'. length = {}".format("sys.exc_info not implemented", str(e), rawmsg, +len(rawmsg)))
         self.payload_length = 0
 
     self.payload      = rawmsg[50 + offset:]
@@ -224,7 +224,7 @@ class Message():
                 device_name = devices[self.destination]['name'] if self.destination in devices else self.destination
                 self.destination_name = "{} {}".format(DEVICE_TYPE[self.destination_type], devices[self.destination]['name'])      # Get the device's actual name if we have it
     except Exception as e:
-        print ("Error initalising device names in Message class instantiation, on line '{}': {}. Raw msg: '{}'. length = {}".format(sys.exc_info()[-1].tb_lineno, str(e), self.rawmsg, len(self.rawmsg)))
+        print ("Error initalising device names in Message class instantiation, on line '{}': {}. Raw msg: '{}'. length = {}".format("sys.exc_info not implemented", str(e), self.rawmsg, len(self.rawmsg)))
 
 
   def is_broadcast(self):

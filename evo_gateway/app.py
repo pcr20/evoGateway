@@ -50,8 +50,13 @@ import time#, datetime
 import json
 import re
 from collections import namedtuple, deque
+
 from .config import *
 from .general import *
+import evo_gateway.globalcfg as gcfg
+
+#from evo_gateway.general import log
+
 
 def init_homie():
     # WIP....
@@ -185,8 +190,9 @@ def process_received_message(msg):
         COMMANDS[msg.command_code](msg)
         log('{: <18} {}'.format(msg.command_name, msg.rawmsg), msg.port)
       except Exception as e:
-          display_and_log ("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), sys.exc_info()[-1].tb_lineno, msg.command_name, msg.rawmsg, msg.port))
-          print(traceback.format_exc())
+          display_and_log ("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), "sys.exc_info not implemented", msg.command_name, msg.rawmsg, msg.port))
+          #print(traceback.format_exc())
+          sys.print_exception(e)
           return None
       return msg
   else:
@@ -639,8 +645,9 @@ def language(msg):
         iso_code =  bytearray.fromhex(iso_code_ascii).decode("utf-8").replace("\x00","").replace("\xff","") 
         display_data_row(msg, "{} ({})".format(iso_code, iso_code_ascii))
     except Exception as e:
-        display_and_log ("ERROR", "'{}' on line {} [Command {}, payload: '{}', port: {}]".format(str(e), sys.exc_info()[-1].tb_lineno, msg.command_name, msg.payload, msg.port))
-        print(traceback.format_exc())
+        display_and_log ("ERROR", "'{}' on line {} [Command {}, payload: '{}', port: {}]".format(str(e), "sys.exc_info not implemented", msg.command_name, msg.payload, msg.port))
+        #print(traceback.format_exc())
+        sys.print_exception(e)
 
 
 def fault_log(msg):
@@ -1060,26 +1067,26 @@ def send_command_to_evohome(command):
   display_and_log("COMMAND_OUT","{} {} Command SENT".format(command.command_name.upper() if command.command_name is not None else command.command_code,
     command.arg_desc if command.arg_desc !="[]" else ":"), command.serial_port.tag)
 
-  if mqtt_client and mqtt_client.is_connected:
+  if gcfg.mqtt_client and gcfg.mqtt_client.is_connected:
     #timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%XZ") #2022-03-11T21:30:00Z
     t = time.gmtime()
     timestamp = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(t[0],t[1],t[2],t[3],t[4],t[5])
-    mqtt_client.publish("{}/failed".format(SENT_COMMAND_TOPIC), False, 0, True) # Reset this before the others, to avoid incorrect interpretation of status by 3rd party apps
+    gcfg.mqtt_client.publish("{}/failed".format(SENT_COMMAND_TOPIC), False, 0, True) # Reset this before the others, to avoid incorrect interpretation of status by 3rd party apps
     # mqtt_client.publish("{}/failed_ts".format(SENT_COMMAND_TOPIC), "", 0, True)
-    mqtt_client.publish("{}/retries".format(SENT_COMMAND_TOPIC), command.retries, 0, True)
+    gcfg.mqtt_client.publish("{}/retries".format(SENT_COMMAND_TOPIC), command.retries, 0, True)
     mqtt_client.publish("{}/retry_ts".format(SENT_COMMAND_TOPIC), "", 0, True)
-    mqtt_client.publish("{}/ack".format(SENT_COMMAND_TOPIC),False, 0, True)
+    gcfg.mqtt_client.publish("{}/ack".format(SENT_COMMAND_TOPIC),False, 0, True)
     # mqtt_client.publish("{}/ack_ts".format(SENT_COMMAND_TOPIC),"", 0, True)
     
-    mqtt_client.publish("{}/command".format(SENT_COMMAND_TOPIC), "{} {}".format(command.command_name, command.args), 0, True)
-    mqtt_client.publish("{}/evo_msg".format(SENT_COMMAND_TOPIC), command.send_string, 0, True)
+    gcfg.mqtt_client.publish("{}/command".format(SENT_COMMAND_TOPIC), "{} {}".format(command.command_name, command.args), 0, True)
+    gcfg.mqtt_client.publish("{}/evo_msg".format(SENT_COMMAND_TOPIC), command.send_string, 0, True)
     
-    mqtt_client.publish("{}/org_instruction".format(SENT_COMMAND_TOPIC), command.command_instruction, 0, True)
-    mqtt_client.publish(MQTT_SUB_TOPIC, "", 0, True)
+    gcfg.mqtt_client.publish("{}/org_instruction".format(SENT_COMMAND_TOPIC), command.command_instruction, 0, True)
+    gcfg.mqtt_client.publish(MQTT_SUB_TOPIC, "", 0, True)
     if command.retries == 0:
-      mqtt_client.publish("{}/initial_sent_ts".format(SENT_COMMAND_TOPIC), timestamp, 0, True)
+      gcfg.mqtt_client.publish("{}/initial_sent_ts".format(SENT_COMMAND_TOPIC), timestamp, 0, True)
     else:
-      mqtt_client.publish("{}/last_retry_ts".format(SENT_COMMAND_TOPIC), timestamp, 0, True)
+      gcfg.mqtt_client.publish("{}/last_retry_ts".format(SENT_COMMAND_TOPIC), timestamp, 0, True)
   else:
     display_and_log(SYSTEM_MSG_TAG,"[WARN] Client not connected to MQTT broker. No command status messages posted")
 
@@ -1117,7 +1124,7 @@ def check_previous_command_sent(previous_command):
 
         # if AUTO_RESET_PORTS_ON_FAILURE:
         #   # command_code, command_name, args, send_mode = get_reset_serialports_command()
-        #   send_queue.append(get_reset_serialports_command())
+        #   gcfg.send_queue.append(get_reset_serialports_command())
 
 
 # --- evohome Commands Dict

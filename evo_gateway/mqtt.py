@@ -44,14 +44,52 @@
 import os,sys,uos
 
 
-import umqtt.robust as mqtt
+from umqtt.simple import MQTTClient
 import re
 
 import time#, datetime
 
 import json
 import re
+from evo_gateway.config import SYSTEM_MSG_TAG
 
+from evo_gateway.config import MQTT_USER
+from evo_gateway.config import MQTT_PW
+from evo_gateway.config import MQTT_SERVER
+from evo_gateway.config import MQTT_SUB_TOPIC
+from evo_gateway.config import MQTT_PUB_TOPIC
+
+from evo_gateway.config import SYS_CONFIG_COMMAND
+from evo_gateway.config import COMMAND_RESEND_ATTEMPTS
+from evo_gateway.config import AUTO_RESET_PORTS_ON_FAILURE
+from evo_gateway.config import RESET_COM_PORTS
+from evo_gateway.config import CANCEL_SEND_COMMANDS
+import evo_gateway.globalcfg as gcfg
+
+from evo_gateway.general import display_and_log
+from evo_gateway.general import log
+
+import _thread
+
+class MQTTClient_threaded(MQTTClient):
+    is_connected = False
+    thread_id=None
+    on_log=None
+    on_message = None
+    on_connect = None
+
+    def __init__(self,*args, **kwargs):
+        super().__init__(*args, **kwargs)
+    def _mainloop(self):
+        while True:
+            self.wait_msg()
+    def loop_start(self):
+        self.thread_id=_thread.start_new_thread(self._mainloop, tuple())
+    def loop_stop(self):
+        self.thread_id.exit()
+    def set_callback(self,callbackfunction):
+        self.on_message=callbackfunction
+        super().set_callback(callbackfunction)
 
 # --- MQTT Functions -
 def initialise_mqtt_client(mqtt_client):
@@ -64,36 +102,41 @@ def initialise_mqtt_client(mqtt_client):
     mqtt_client.username_pw_set(MQTT_USER, MQTT_PW)
   try:
     mqtt_client.on_connect = mqtt_on_connect
-    mqtt_client.on_message = mqtt_on_message
+    mqtt_client.set_callback(mqtt_on_message)
     mqtt_client.on_log = mqtt_on_log
     mqtt_client.is_connected = False # Custom attribute so that we can track connection status
 
     display_and_log (SYSTEM_MSG_TAG,"Connecting to mqtt broker '%s'" % MQTT_SERVER)
-    mqtt_client.connect(MQTT_SERVER, port=1883, keepalive=60, bind_address="")
+    #r=mqtt_client.connect(MQTT_SERVER, port=1883, keepalive=60, bind_address="")
+    r = mqtt_client.connect()
+    mqtt_on_connect(mqtt_client,"","",r)
     mqtt_client.loop_start()
+
   except Exception as e:
-    display_and_log ("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), sys.exc_info()[-1].tb_lineno, msg.command_name, data, port_tag))
-    print(traceback.format_exc())
+    display_and_log ("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), "sys.exc_info not implemented", mqtt_client, "data", "port_tag"))
+    sys.print_exception(e)
+    #print(traceback.format_exc())
     return None
 
 
-def mqtt_on_connect(client, userdata, flags, rc):
+def mqtt_on_connect(mqtt_client, userdata, flags, rc):
   ''' mqtt connection event processing '''
   if rc == 0:
-      client.is_connected = True #set flag
+      mqtt_client.is_connected = True #set flag
       display_and_log (SYSTEM_MSG_TAG,"MQTT connection established with broker")
       try:
         display_and_log (SYSTEM_MSG_TAG,"Subscribing to mqtt topic '%s'" % MQTT_SUB_TOPIC)
         mqtt_client.subscribe(MQTT_SUB_TOPIC)
       except Exception as e:
-        display_and_log ("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), sys.exc_info()[-1].tb_lineno, msg.command_name, data, port_tag))
-        print(traceback.format_exc())
+        display_and_log ("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), "sys.exc_info not implemented", mqtt_client, userdata, "port_tag"))
+        #print(traceback.format_exc())
+        sys.print_exception(e)
         return None
   else:
-      client.is_connected = False
+      mqtt_client.is_connected = False
       display_and_log (SYSTEM_MSG_TAG,"MQTT connection failed (code {})".format(rc))
       if DEBUG:
-          display_and_log(SYSTEM_MSG_TAG, "[DEBUG] mqtt userdata: {}, flags: {}, client: {}".format(userdata, flags, client))
+          display_and_log(SYSTEM_MSG_TAG, "[DEBUG] mqtt userdata: {}, flags: {}, client: {}".format(userdata, flags, mqtt_client))
 
 
 def mqtt_on_log(client, obj, level, string):
@@ -103,14 +146,13 @@ def mqtt_on_log(client, obj, level, string):
     display_and_log(SYSTEM_MSG_TAG, "[DEBUG] MQTT log msg: {}".format(string))
 
 
-def mqtt_on_message(client, userdata, msg):
+def mqtt_on_message(topic, msg):
   ''' mqtt message received on subscribed topic '''
   # print(msg.payload)
-  global send_queue
-  global last_sent_command
+  #print(msg)
 
   try:
-    json_data = json.loads(str(msg.payload, "utf-8"))
+    json_data = json.loads(str(msg, "utf-8"))
     #print(json_data)
     log("{: <18} {}".format("MQTT_SUB", json_data))
 
@@ -119,8 +161,8 @@ def mqtt_on_message(client, userdata, msg):
        new_command = get_reset_serialports_command()
        new_command.instruction = json.dumps(json_data)
       elif json_data[SYS_CONFIG_COMMAND] == CANCEL_SEND_COMMANDS:
-        send_queue = []
-        last_sent_command = None
+        gcfg.send_queue = []
+        gcfg.last_sent_command = None
         display_and_log(SYSTEM_MSG_TAG, "Cancelled all queued outbound commands")
         return
       else:
@@ -129,9 +171,9 @@ def mqtt_on_message(client, userdata, msg):
     else:
       new_command = get_command_from_mqtt_json(json_data)
 
-    send_queue.append(new_command)
+    gcfg.send_queue.append(new_command)
   except Exception as e:
-    log("{: <18} {}".format("MQTT_SUB", e))
+    log("{: <18} {} msg: {}".format("MQTT_SUB", e,msg))
     return
 
 

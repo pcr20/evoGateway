@@ -60,7 +60,7 @@ from evo_gateway.config import LOG_FILE
 from evo_gateway.config import MAX_LOG_HISTORY
 from evo_gateway.config import MIN_ROW_LENGTH
 from evo_gateway.config import COM_PORTS
-
+from evo_gateway.config import SYSTEM_MSG_TAG
 
 
 # --- General Functions
@@ -180,6 +180,13 @@ def convert_from_twos_comp(hex_val, divisor=100):
     display_and_log("ERROR","Two's complement error {}. hex_val argument: {}".format(e, hex_val))
 
 
+class FakeSerial():
+    def __init__(self):
+        pass
+    def any(self):
+        return 0
+
+
 # Init com ports
 def init_com_ports():
   serial_ports = {}
@@ -190,11 +197,14 @@ def init_com_ports():
       serial_port = None
       while (limit > 0) and serial_port is None:
         try:
-          assert ('uname' in dir(uos) and uos.uname()[0]=='esp32'),"Not ESP32, no serial port support"
-          from machine import UART
-          baudrate = params["baud"] if "baud" in params else 115200
-          serial_port = UART(int(port),baudrate=baudrate,tx=params["tx_pin"],rx=params["rx_pin"])
-          break
+          if sys.platform=='esp32':
+              assert ('uname' in dir(uos) and uos.uname()[0]=='esp32'),"Not ESP32, no serial port support"
+              from machine import UART
+              baudrate = params["baud"] if "baud" in params else 115200
+              serial_port = UART(int(port),baudrate=baudrate,tx=params["tx_pin"],rx=params["rx_pin"])
+              break
+          else:
+              serial_port=FakeSerial()
 
         except Exception as e:
           if limit > 1:
