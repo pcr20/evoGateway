@@ -44,12 +44,13 @@
 import os,sys,uos
 #import traceback
 
+
 #import paho.mqtt.client as mqtt
 import umqtt.robust as mqtt
 import re
 #import serial
-#from machine import UART as serial
-import time, datetime
+
+import time#, datetime
 #import signal
 import json
 import re
@@ -60,16 +61,27 @@ import os.path
 if  os.path.isdir(sys.argv[0]):
     os.chdir(os.path.dirname(sys.argv[0]))
 
-from evo_gateway.config import *
-from evo_gateway.app import *
-from evo_gateway.general import *
-from evo_gateway.mqtt import *
+
+import evo_gateway
+from evo_gateway.config import LOG_FILE
+from evo_gateway.config import EVENTS_FILE
+from evo_gateway.config import VERSION
+
+
+import evo_gateway.globalcfg as gcfg #for eventfile and logfile
+
+from evo_gateway.general import rotate_files
+from evo_gateway.general import display_and_log
+from evo_gateway.general import init_com_ports
+
 
 # --- Main
 rotate_files(LOG_FILE)
 rotate_files(EVENTS_FILE)
-logfile = open(LOG_FILE, "a")
-eventfile = open(EVENTS_FILE,"a")
+gcfg.logfile = open(LOG_FILE, "a")
+
+gcfg.eventfile = open(EVENTS_FILE,"a")
+
 
 #signal.signal(signal.SIGINT, sig_handler)    # Trap CTL-C etc
 
@@ -81,8 +93,8 @@ if len(serial_ports) == 0:
   print("Serial port(s) parameters not found. Exiting...")
   sys.exit()
 
-logfile.write("")
-logfile.write("-----------------------------------------------------------\n")
+gcfg.logfile.write("")
+gcfg.logfile.write("-----------------------------------------------------------\n")
 
 if os.path.isfile(DEVICES_FILE):
   with open(DEVICES_FILE, 'r') as fp:
@@ -112,7 +124,7 @@ display_and_log('','-----------------------------------------------------------'
 display_and_log('','')
 display_and_log('','Listening...')
 
-logfile.flush()
+gcfg.logfile.flush()
 
 # init MQTT
 if MQTT_SERVER:
@@ -170,7 +182,8 @@ while ports_open:
                   mqtt_publish("","command_sent_failed",False,"{}/failed".format(SENT_COMMAND_TOPIC)) 
                   mqtt_publish("", "", True, "{}/ack".format(SENT_COMMAND_TOPIC))
                   last_sent_command.send_acknowledged = True
-                  last_sent_command.send_acknowledged_dtm = datetime.datetime.now()
+                  #last_sent_command.send_acknowledged_dtm = datetime.datetime.now()
+                  last_sent_command.send_acknowledged_dtm = time.gmtime()
                   display_and_log("COMMAND_OUT","{} {} Command ACKNOWLEDGED".format(last_sent_command.command_name.upper(),
                     last_sent_command.arg_desc if last_sent_command.arg_desc != "[]" else ":"), serial_port.tag)
                 prev_data_had_errors = False
@@ -179,7 +192,7 @@ while ports_open:
                       prev_data_had_errors = True
                       display_and_log("ERROR","--- Message dropped: packet error from hardware/firmware", serial_port.tag)
                   log("{: <17}{} {}".format("", "^" if is_duplicate else " " , data_row), serial_port.tag)
-              logfile.flush()
+              gcfg.logfile.flush()
               data_row_stack.append(stack_entry)
               if len(data_row_stack) > MAX_HISTORY_STACK_LENGTH:
                 data_row_stack.popleft()

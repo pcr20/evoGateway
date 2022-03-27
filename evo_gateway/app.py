@@ -45,7 +45,7 @@ import os,sys,uos
 
 import re
 
-import time, datetime
+import time#, datetime
 
 import json
 import re
@@ -236,7 +236,13 @@ def sync(msg):
 
   if msg.payload[0:2] == "FF":
     timeout = int(msg.payload[2:6],16) / 10
-    timeout_time = (datetime.datetime.now() + datetime.timedelta(seconds = timeout)).strftime("%H:%M:%S")
+    #timeout_time = (datetime.datetime.now() + datetime.timedelta(seconds = timeout)).strftime("%H:%M:%S")
+    timeout_s=(time.time()+timeout)
+    timeout_minutes=timeout_s//60
+    timeout_seconds = timeout_s % 60
+    timeout_hours = timeout_minutes // 60
+    timeout_minutes = timeout_minutes % 60
+    timeout_time = "{}:{:02d}:{:02d}".format(timeout_hours,timeout_minutes,timeout_seconds)
     display_data_row(msg, "Next sync at {} (in {} secs)".format(timeout_time, timeout))
   else:
     display_data_row(msg, "Payload: {}".format(msg.payload))
@@ -320,7 +326,7 @@ def setpoint_override(msg):
         dtm = get_dtm_from_packed_hex(dtm_hex)
         until = " - Until " + str(dtm)
         mqtt_publish(topic, "mode", "Temporary")
-        mqtt_publish(topic, "mode_until", dtm.strftime("%Y-%m-%dT%XZ"))
+        mqtt_publish(topic, "mode_until", "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(dtm[0],dtm[1],dtm[2],dtm[3],dtm[4],dtm[5]))
     else:
         until =""
         mqtt_publish(topic, "mode", "Scheduled")
@@ -566,7 +572,7 @@ def dhw_state(msg):
         mqtt_publish("DHW","state",stateId)
         mqtt_publish("DHW","mode",mode)
         if until >"":
-            mqtt_publish("DHW", "mode_until", dtm.strftime("%Y-%m-%dT%XZ"))
+            mqtt_publish("DHW", "mode_until", "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(dtm[0],dtm[1],dtm[2],dtm[3],dtm[4],dtm[5]))
         else:
             mqtt_publish("DHW", "mode_until", "")
 
@@ -656,7 +662,8 @@ def fault_log(msg):
     minute = (dtm_hex & int("111111",2) << 13) >> 13
     second = (dtm_hex & int("111111",2) << 7) >> 7
 
-    dtm = datetime.datetime(year, month, day, hour, minute, second)
+    #dtm = datetime.datetime(year, month, day, hour, minute, second)
+    dtm = (year, month, day, hour, minute, second)
 
     dev_id_int = int(msg.payload[38:40],16) << 16 | int(msg.payload[40:42],16) << 8 | int(msg.payload[42:44],16)
     dev_id = "{:02}:{:06}".format((dev_id_int >> 18) & 0X3F, dev_id_int & 0x3FFFF)
@@ -699,13 +706,19 @@ def fault_log(msg):
     else: 
       device_type = "Unknown device type '{}'".format(device_type_id)
 
-    display_data_row(msg, "{}: {:%Y-%m-%d %H:%M:%S} [{} {}] {}: '{}' (Device ID: {})".format(
-      log_entry_number, dtm, device_type, device_name, fault_type, fault, dev_id))
-    
-    msg = {"device_type": device_type, "device_id": dev_id, "device_name" : device_name, "device_num" : dev_num, 
-      "fault_type": fault_type, "fault": fault, "event_ts": "{:%Y-%m-%dT%H:%M:%S}".format(dtm), "index": log_entry_number}
-    mqtt_publish("_faults", str(log_entry_number), json.dumps(msg))
+    #display_data_row(msg, "{}: {:%Y-%m-%d %H:%M:%S} [{} {}] {}: '{}' (Device ID: {})".format(
+    #  log_entry_number, dtm_str, device_type, device_name, fault_type, fault, dev_id))
 
+    #msg = {"device_type": device_type, "device_id": dev_id, "device_name" : device_name, "device_num" : dev_num,
+    #  "fault_type": fault_type, "fault": fault, "event_ts": "{:%Y-%m-%dT%H:%M:%S}".format(dtm), "index": log_entry_number}
+
+    dtm_str=":{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(dtm[0],dtm[1],dtm[2],dtm[3],dtm[4],dtm[5])
+    display_data_row(msg, "{}: {} [{} {}] {}: '{}' (Device ID: {})".format(
+      log_entry_number, dtm_str, device_type, device_name, fault_type, fault, dev_id))
+    dtm_str_i=":{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}".format(dtm[0],dtm[1],dtm[2],dtm[3],dtm[4],dtm[5])
+    msg = {"device_type": device_type, "device_id": dev_id, "device_name" : device_name, "device_num" : dev_num,
+      "fault_type": fault_type, "fault": fault, "event_ts": dtm_str_i, "index": log_entry_number}
+    mqtt_publish("_faults", str(log_entry_number), json.dumps(msg))
 
 def battery_info(msg):
   if msg.payload_length != 3:
@@ -1014,8 +1027,14 @@ def get_setpoint_override_payload(zone_id, setpoint, until_string="", setpoint_i
 
 
 def dtm_string_to_payload(dtm_string):
-    dtm = datetime.datetime.strptime(dtm_string, "%Y-%m-%dT%H:%M:%SZ")
-    payload = "{:02X}{:02X}{:02X}{:02X}{:04X}".format(dtm.minute, dtm.hour, dtm.day, dtm.month, dtm.year)
+    #dtm = datetime.datetime.strptime(dtm_string, "%Y-%m-%dT%H:%M:%SZ")
+    year = int(t[0:4])
+    month = int(t[5:7])
+    day = int(t[8:10])
+    hour = int(t[11:13])
+    minute = int(t[14:16])
+    sec = int(t[17:19])
+    payload = "{:02X}{:02X}{:02X}{:02X}{:04X}".format(minute, hour, day, month, year)
     return payload
 
 
@@ -1042,8 +1061,10 @@ def send_command_to_evohome(command):
     command.arg_desc if command.arg_desc !="[]" else ":"), command.serial_port.tag)
 
   if mqtt_client and mqtt_client.is_connected:
-    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%XZ")
-    mqtt_client.publish("{}/failed".format(SENT_COMMAND_TOPIC), False, 0, True) # Reset this before the others, to avoid incorrect interpretation of status by 3rd party apps 
+    #timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%XZ") #2022-03-11T21:30:00Z
+    t = time.gmtime()
+    timestamp = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(t[0],t[1],t[2],t[3],t[4],t[5])
+    mqtt_client.publish("{}/failed".format(SENT_COMMAND_TOPIC), False, 0, True) # Reset this before the others, to avoid incorrect interpretation of status by 3rd party apps
     # mqtt_client.publish("{}/failed_ts".format(SENT_COMMAND_TOPIC), "", 0, True)
     mqtt_client.publish("{}/retries".format(SENT_COMMAND_TOPIC), command.retries, 0, True)
     mqtt_client.publish("{}/retry_ts".format(SENT_COMMAND_TOPIC), "", 0, True)
@@ -1063,8 +1084,11 @@ def send_command_to_evohome(command):
     display_and_log(SYSTEM_MSG_TAG,"[WARN] Client not connected to MQTT broker. No command status messages posted")
 
   if command.retries ==  0:
-    command.send_dtm = datetime.datetime.now()
-  command.retry_dtm = datetime.datetime.now()
+    #command.send_dtm = datetime.datetime.now()
+    command.send_dtm = time.time()
+  #command.retry_dtm = datetime.datetime.now()
+  command.retry_dtm = time.time()
+
   command.retries += 1
 
   return command
@@ -1075,7 +1099,8 @@ def check_previous_command_sent(previous_command):
   if not previous_command or previous_command.send_acknowledged:
     return
 
-  seconds_since_sent = (datetime.datetime.now() - previous_command.retry_dtm).total_seconds()
+  #seconds_since_sent = (datetime.datetime.now() - previous_command.retry_dtm).total_seconds()
+  seconds_since_sent = time.time() - previous_command.retry_dtm
   if seconds_since_sent > COMMAND_RESEND_TIMEOUT_SECS:
     if previous_command.retries <= COMMAND_RESEND_ATTEMPTS and not previous_command.send_failed:
         if previous_command.retries == COMMAND_RESEND_ATTEMPTS and AUTO_RESET_PORTS_ON_FAILURE:

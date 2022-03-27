@@ -45,11 +45,12 @@ import os,sys,uos
 import configparser
 import re
 
-import time, datetime
+import time#, datetime
 import json
 import re
 from collections import namedtuple, deque
 import os.path
+
 
 #---------------------------------------------------------------------------------------------------
 VERSION         = "2.1.0"
@@ -79,7 +80,9 @@ if COM_PORTS is None:
   COM_PORT          = getConfig(config,"Serial Port","COM_PORT","/dev/ttyUSB0")
   COM_BAUD          = int(getConfig(config,"Serial Port","COM_BAUD",115200))
   COM_RETRY_LIMIT   = int(getConfig(config,"Serial Port","COM_RETRY_LIMIT",10))
-  COM_PORTS = {COM_PORT: {"baud" : COM_BAUD, "retry_limit": COM_RETRY_LIMIT, "is_send_port": True}}
+  COM_TX_PIN = int(getConfig(config, "Serial Port", "COM_TX_PIN", 17))
+  COM_RX_PIN = int(getConfig(config, "Serial Port", "COM_RX_PIN", 16))
+  COM_PORTS = {COM_PORT: {"baud" : COM_BAUD, "retry_limit": COM_RETRY_LIMIT, "is_send_port": True, "tx_pin": COM_TX_PIN, "rx_pin": COM_RX_PIN}}
 
 EVENTS_FILE       = getConfig(config,"Files", "EVENTS_FILE", "events.log")
 LOG_FILE          = getConfig(config,"Files", "LOG_FILE", "evogateway.log")
@@ -228,11 +231,14 @@ class Message():
     return self.source == self.destination
 
 
-  def get_raw_msg_with_ts(self, strip_rssi=True):    
+  def get_raw_msg_with_ts(self, strip_rssi=True):
+    t = time.gmtime()
     if self.rssi: # remove the rssi before saving to stack - different controllers may receive the same message but with different signal strengths
-      raw = "{}: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), "--- {}".format(self.rawmsg[8:]))
+      raw = "{}-{}-{} {}:{}:{}: {}".format(t[0], t[1], t[2], t[3], t[4], t[5], "--- {}".format(self.rawmsg[8:]))
+      #raw = "{}: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), "--- {}".format(self.rawmsg[8:]))
     else:
-      raw = "{}: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), self.rawmsg)    
+      raw = "{}-{}-{} {}:{}:{}: {}".format(t[0], t[1], t[2], t[3], t[4], t[5], self.rawmsg)
+      #raw = "{}: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), self.rawmsg)
     return raw
 
 

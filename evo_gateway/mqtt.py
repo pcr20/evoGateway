@@ -47,7 +47,7 @@ import os,sys,uos
 import umqtt.robust as mqtt
 import re
 
-import time, datetime
+import time#, datetime
 
 import json
 import re
@@ -166,7 +166,9 @@ def mqtt_publish(device, command, msg, topic=None, auto_ts=True):
   try:
       if not topic:
         topic = "{}/{}/{}".format(MQTT_PUB_TOPIC, to_snake(device), command.strip())
-      timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%XZ")
+      #timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%XZ")
+      t = time.gmtime()
+      timestamp = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(t[0], t[1], t[2], t[3], t[4], t[5])
       mqtt_client.publish(topic, msg, 0, True)
       if auto_ts:
         mqtt_client.publish("{}{}".format(topic,"_ts"), timestamp, 0, True)

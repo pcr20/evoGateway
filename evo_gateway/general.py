@@ -45,7 +45,7 @@ import os,sys,uos
 
 import re
 
-import time, datetime
+import time
 
 import json
 import re
@@ -53,13 +53,23 @@ from collections import namedtuple, deque
 
 import os.path
 
-from .config import *
+import evo_gateway.globalcfg as gcfg #for eventfile and logfile
+
+from evo_gateway.config import EVENTS_FILE
+from evo_gateway.config import LOG_FILE
+from evo_gateway.config import MAX_LOG_HISTORY
+from evo_gateway.config import MIN_ROW_LENGTH
+from evo_gateway.config import COM_PORTS
+
+
 
 # --- General Functions
 def sig_handler(signum, frame):              # Trap Ctl C
-    print("{} Tidying up and exiting...".format(datetime.datetime.now().strftime("%Y-%m-%d %X")))
+    t = time.gmtime()
+    tstr = "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(t[0], t[1], t[2], t[3], t[4], t[5])
+    print("{} Tidying up and exiting...".format(tstr))
     # display_and_log("Tidying up and exiting...")
-    logfile.close()
+    gcfg.logfile.close()
     for port_id, port in serial_ports.items():
       if port["connection"].is_open:
         print("Closing port '{}'".format(port["connection"].port))
@@ -101,7 +111,8 @@ def get_dtm_from_packed_hex(dtm_hex):
   dtm_day = int(dtm_hex[4:6],16)
   dtm_month = int(dtm_hex[6:8],16)
   dtm_year = int(dtm_hex[8:12],16)
-  return datetime.datetime(year=dtm_year,month=dtm_month, day=dtm_day,hour=dtm_hours,minute=dtm_mins)
+  #return datetime.datetime(year=dtm_year,month=dtm_month, day=dtm_day,hour=dtm_hours,minute=dtm_mins)
+  return (dtm_year,dtm_month,dtm_day,dtm_hours,dtm_mins,0)
 
 
 def display_data_row(msg, display_text, ref_zone=-1, suffix_text=""):
@@ -115,34 +126,41 @@ def display_data_row(msg, display_text, ref_zone=-1, suffix_text=""):
   display_and_log(msg.command_name, display_row, msg.port, msg.rssi)
 
 
+
 def display_and_log(source="-", display_message="", port_tag=None, rssi=None):
   try:
-    global eventfile
     if os.path.getsize(EVENTS_FILE) > 5000000:
-        eventfile.close()
+        gcfg.eventfile.close()
         rotate_files(EVENTS_FILE)
-        eventfile = open(EVENTS_FILE,"a")
+        gcfg.eventfile = open(EVENTS_FILE,"a")
+  
     port_rssi = "{}/{:3s}".format(port_tag, rssi if rssi else " - ") if port_tag else ""
-    row = "{} |{:<5}| {:<20}| {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), port_rssi, source, display_message)
+    #row = "{} |{:<5}| {:<20}| {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), port_rssi, source, display_message)
+    t = time.gmtime()
+    row = "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d} |{:<5}| {:<20}| {}".format(t[0],t[1],t[2],t[3],t[4],t[5], port_rssi, source, display_message)
+
     row = "{:<{min_row_width}}".format(row, min_row_width=MIN_ROW_LENGTH)
     print (row)
     # print   (datetime.datetime.now().strftime("%Y-%m-%d %X") + ": " + "{:<20}".format(str(source)) + ": " + str(display_message))
-    eventfile.write(row + "\n")
-    eventfile.flush()
+    gcfg.eventfile.write(row + "\n")
+    gcfg.eventfile.flush()
   except Exception as e:
-    print (str(e))
+    print ("display_and_log",__file__,str(e))
 
 
 
 def log(logentry, port_tag="-"):
-  global logfile
   if os.path.getsize(LOG_FILE) > 10000000:
-        logfile.close()
+        gcfg.logfile.close()
         rotate_files(LOG_FILE)
-        logfile = open(LOG_FILE,"a")
+        gcfg.logfile = open(LOG_FILE,"a")
+  t = time.gmtime()
+  tstr = "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(t[0], t[1], t[2], t[3], t[4], t[5])
 
-  logfile.write("{} |{}| {}\n".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), port_tag, logentry.rstrip()))
-  logfile.flush()
+  #gcfg.logfile.write("{} |{}| {}\n".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), port_tag, logentry.rstrip()))
+  gcfg.logfile.write("{} |{}| {}\n".format(tstr, port_tag, logentry.rstrip()))
+
+  gcfg.logfile.flush()
 
 
 def parity(x):
@@ -172,14 +190,12 @@ def init_com_ports():
       serial_port = None
       while (limit > 0) and serial_port is None:
         try:
-          serial_port = serial.Serial(port)
-          serial_port.baudrate = params["baud"] if "baud" in params else 115200
-          serial_port.bytesize = 8
-          serial_port.parity   = 'N'
-          serial_port.stopbits = 1
-          serial_port.timeout = 1
-
+          assert ('uname' in dir(uos) and uos.uname()[0]=='esp32'),"Not ESP32, no serial port support"
+          from machine import UART
+          baudrate = params["baud"] if "baud" in params else 115200
+          serial_port = UART(int(port),baudrate=baudrate,tx=params["tx_pin"],rx=params["rx_pin"])
           break
+
         except Exception as e:
           if limit > 1:
               display_and_log("COM_PORT ERROR",repr(e) + ". Retrying in 5 seconds")
@@ -189,21 +205,16 @@ def init_com_ports():
               display_and_log("COM_PORT ERROR","Error connecting to COM port {}. Giving up...".format(params["com_port"]))
 
       if serial_port is not None:
-        serial_port.tag = count
+        #serial_port.tag = count
         serial_ports[port] = {"connection": serial_port, "parameters" : params, "tag": count}
-        display_and_log(SYSTEM_MSG_TAG,"{}: Connected to serial port {}".format(serial_ports[port]["tag"], port))
+        display_and_log(SYSTEM_MSG_TAG,"{}: Connected to serial port {}".format(count, port))
         count +=1
   return serial_ports
 
 def reset_com_ports():
   if len(serial_ports) > 1:
     display_and_log(SYSTEM_MSG_TAG,"Resetting serial port connections")
+    display_and_log(SYSTEM_MSG_TAG, "NOT IMPLEMENTED")
   # if port is changed for a given serial_port, the serial_port is closed/reopened as per pySerial docs
-  for port_id, port in serial_ports.items():
-      if port["connection"]:
-        display_and_log(SYSTEM_MSG_TAG,"Resetting port '{}'".format(port["connection"].port))
-        # port["connection"].port = port["connection"].port
-        port["connection"].close()
-        time.sleep(2)
-        port["connection"].open()
+  #TODO
   display_and_log(SYSTEM_MSG_TAG,"Serial ports have been reset")
