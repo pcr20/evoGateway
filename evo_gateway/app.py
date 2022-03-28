@@ -57,6 +57,136 @@ import evo_gateway.globalcfg as gcfg
 
 #from evo_gateway.general import log
 
+# --- Classes
+class Message():
+    ''' Object to hold details of interpreted (received) message. '''
+
+    def __init__(self, rawmsg, has_rssi=False):
+        offset = 4 if has_rssi else 0  # new ghoti57 fifo_hang branch has rssi
+
+        self.rawmsg = rawmsg.strip()
+
+        self.rssi = rawmsg[4:7] if has_rssi else None
+
+        self.source_id = rawmsg[11 + offset: 20 + offset]
+        self.msg_type = rawmsg[4 + offset:  6 + offset].strip()
+        self.source = rawmsg[
+                      11 + offset: 20 + offset]  # device 1 - This looks as if this is always the source; Note this is overwritten with name of +device
+        self.source_type = rawmsg[
+                           11 + offset: 13 + offset]  # the first 2 digits seem to be identifier for type of +device
+        self.source_name = self.source
+        self.device2 = rawmsg[
+                       21 + offset: 30 + offset]  # device 2 - Requests (RQ), Responses (RP) and Write (W) seem to be sent to device 2 +only
+        self.device2_type = rawmsg[21 + offset: 23 + offset]  # device 2 +type
+        self.device2_name = self.device2
+        self.device3 = rawmsg[
+                       31 + offset: 40 + offset]  # device 3 - Information (I) is to device 3. Broadcast messages have device 1 and 3 are the +same
+        self.device3_type = rawmsg[31 + offset: 33 + offset]  # device 3 +type
+        self.device3_name = self.device3
+
+        if self.device2 == EMPTY_DEVICE_ID:
+            self.destination = self.device3
+            self.destination_type = self.device3_type
+        else:
+            self.destination = self.device2
+            self.destination_type = self.device2_type
+        self.destination_name = self.destination
+
+        # There seem to be some OpenTherm messages without a source/device2; just device3.
+        # Could be firmware issue with source/dest swapped? For now, let's swap over and see...
+        if self.source == EMPTY_DEVICE_ID and self.device3 != EMPTY_DEVICE_ID:
+            self.source = self.device3
+            self.source_type = self.device3_type
+            self.device3 = rawmsg[11:20]
+            self.devic3_type = rawmsg[11:13]
+
+        self._initialise_device_names()
+
+        self.command_code = rawmsg[41 + offset: 45 + offset].upper()  # command code +hex
+        self.command_name = self.command_code  # needs to be assigned outside, as we are doing all the processing outside of this class/struct
+        try:
+            self.payload_length = int(rawmsg[46 + offset: 49 + offset])  # Note this is not +HEX...
+        except Exception as e:
+            print("Error instantiating Message class on line '{}':  {}. Raw msg: '{}'. length = {}".format(
+                "sys.exc_info not implemented", str(e), rawmsg, +len(rawmsg)))
+            self.payload_length = 0
+
+        self.payload = rawmsg[50 + offset:]
+        self.port = None
+        self.failed_decrypt = "_ENC" in rawmsg or "_BAD" in rawmsg or "BAD_" in rawmsg or "ERR" in rawmsg
+
+    def _initialise_device_names(self):
+        ''' Substitute device IDs for names if we have them or identify broadcast '''
+        try:
+            if self.source_type == DEVICE_TYPE['CTL'] and self.is_broadcast():
+                self.destination_name = "CONTROLLER"
+                self.source_name = "CONTROLLER"
+            elif DEVICE_TYPE[self.source_type] and self.source in gcfg.devices and gcfg.devices[self.source]['name']:
+                self.source_name = "{} {}".format(DEVICE_TYPE[self.source_type], gcfg.devices[self.source][
+                    'name'])  # Get the device's actual name if we have it
+            else:
+                print("Could not find device type '{}' or name for device '{}'".format(self.source_type, self.source))
+            if self.destination_name != "CONTROLLER" and self.destination in gcfg.devices and gcfg.devices[self.destination][
+                'name']:
+                if self.destination_type == DEVICE_TYPE['CTL']:
+                    self.destination_name = "CONTROLLER"
+                else:
+                    device_name = gcfg.devices[self.destination]['name'] if self.destination in gcfg.devices else self.destination
+                    self.destination_name = "{} {}".format(DEVICE_TYPE[self.destination_type],
+                                                           gcfg.devices[self.destination][
+                                                               'name'])  # Get the device's actual name if we have it
+        except Exception as e:
+            print(
+                "Error initalising device names in Message class instantiation, on line '{}': {}. Raw msg: '{}'. length = {}".format(
+                    "sys.exc_info not implemented", str(e), self.rawmsg, len(self.rawmsg)))
+
+    def is_broadcast(self):
+        return self.source == self.destination
+
+    def get_raw_msg_with_ts(self, strip_rssi=True):
+        t = time.gmtime()
+        if self.rssi:  # remove the rssi before saving to stack - different controllers may receive the same message but with different signal strengths
+            raw = "{}-{}-{} {}:{}:{}: {}".format(t[0], t[1], t[2], t[3], t[4], t[5], "--- {}".format(self.rawmsg[8:]))
+            # raw = "{}: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), "--- {}".format(self.rawmsg[8:]))
+        else:
+            raw = "{}-{}-{} {}:{}:{}: {}".format(t[0], t[1], t[2], t[3], t[4], t[5], self.rawmsg)
+            # raw = "{}: {}".format(datetime.datetime.now().strftime("%Y-%m-%d %X"), self.rawmsg)
+        return raw
+
+
+class Command():
+    ''' Object to hold details of command sent to evohome controller.'''
+
+    def __init__(self, command_code=None, command_name=None, destination=None, args=None, serial_port=-1, send_mode="I",
+                 instruction=None):
+        self.command_code = command_code
+        self.command_name = command_name
+        self.destination = destination
+        self.args = args
+        self.arg_desc = "[]"
+        self.serial_port = serial_port
+        self.send_mode = send_mode
+        self.send_string = None
+        self.send_dtm = None
+        self.retry_dtm = None
+        self.retries = 0
+        self.send_failed = False
+        self.wait_for_ack = False
+        self.reset_ports_on_fail = True
+        self.send_acknowledged = False
+        self.send_acknowledged_dtm = None
+        self.dev1 = None
+        self.dev2 = None
+        self.dev3 = None
+        self.payload = ""
+        self.command_instruction = instruction
+
+    def payload_length(self):
+        if self.payload:
+            return int(len(self.payload) / 2)
+        else:
+            return 0
+
 
 def init_homie():
     # WIP....
@@ -85,7 +215,7 @@ def init_homie():
     node_msgs = []
     nodes_topic = "{}/$nodes".format(topic_base)
 
-    for device_id, device in devices.items():
+    for device_id, gcfg.device in gcfg.devices.items():
         device_type = device_id.split(":")[0]
         device_name = to_snake(device["name"]).lower().replace("_","-")
 
@@ -146,6 +276,9 @@ def get_homie_node_topics(node_topic, node_property):
     return msgs
 
 
+data_pattern = re.compile("^--- ( I| W|RQ|RP) --- (--:------ |\d\d:\d\d\d\d\d\d )(--:------ |\d\d:\d\d\d\d\d\d )(--:------ |\d\d:\d\d\d\d\d\d )[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] \d\d\d")
+data_pattern_with_rssi = re.compile("^--- \d\d\d ( I| W|RQ|RP) --- (--:------ |\d\d:\d\d\d\d\d\d )(--:------ |\d\d:\d\d\d\d\d\d )(--:------ |\d\d:\d\d\d\d\d\d )[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] \d\d\d")
+
 # --- evohome received message command processing functions
 def get_message_from_data(data, port_tag=None):
   ''' Convert the received raw data into a Message object  '''
@@ -177,11 +310,11 @@ def process_received_message(msg):
     return None
 
   # Check if device is known...
-  if not msg.source in devices:
+  if not msg.source in gcfg.devices:
       display_and_log("NEW DEVICE FOUND", msg.source)
-      devices.update({msg.source : {"name" : msg.source, "zoneId" : -1, "zoneMaster" : False  }})
+      gcfg.devices.update({msg.source : {"name" : msg.source, "zoneId" : -1, "zoneMaster" : False  }})
       with open(NEW_DEVICES_FILE,'w') as fp:
-          fp.write(json.dumps(devices, sort_keys=True, indent=4))
+          fp.write(json.dumps(gcfg.devices, sort_keys=True, indent=4))
       fp.close()
 
   if msg.command_code in COMMANDS:
@@ -216,7 +349,7 @@ def get_zone_details(payload, source_type=None):
         else:
             zone_name ="BDR DHW Relay"
     elif zone_id == 0xfc:    # Boiler relay or possibly broadcast
-      zone_name = "OTB OpenTherm Bridge" if [k for k in devices if "10:" in k] else "BDR Boiler Relay"
+      zone_name = "OTB OpenTherm Bridge" if [k for k in gcfg.devices if "10:" in k] else "BDR Boiler Relay"
     elif zone_id == 0xf9:  # Radiator circuit zone valve relay
         zone_name ="BDR Radiators Relay"
     elif zone_id == 0xc: # Electric underfloor relay
@@ -275,10 +408,10 @@ def setpoint_ufh(msg):
     # We add 900 to identify UFH zone numbers
     zone_setpoint = float(int(msg.payload[2+i:6+i],16))/100
     # zone_name =""
-    for d in devices:
-        if devices[d].get('ufh_zoneId') and zone_id == devices[d]['ufh_zoneId']:
-            zone_id = devices[d]["zoneId"]
-            zone_name = devices[d]["name"]
+    for d in gcfg.devices:
+        if gcfg.devices[d].get('ufh_zoneId') and zone_id == gcfg.devices[d]['ufh_zoneId']:
+            zone_id = gcfg.devices[d]["zoneId"]
+            zone_name = gcfg.devices[d]["name"]
             break
     if zone_name == "":
         display_and_log("DEBUG","UFH Setpoint Zone '{}' name not found".format(zone_id), msg.port)
@@ -362,8 +495,8 @@ def zone_temperature(msg):
     # If msg from controller, then get the zone_id from the data block. Otherwise use the zone_id of the msg sender
     if msg.source_id == CONTROLLER_ID: 
       zone_id = int(zone_data[:2], 16) + 1
-    elif devices.get(msg.source_id):
-      zone_id = devices[msg.source_id]["zoneId"]
+    elif gcfg.devices.get(msg.source_id):
+      zone_id = gcfg.devices[msg.source_id]["zoneId"]
     else:
       zone_id = 0
       display_and_log("DEBUG","Device not found for source ID {}".format(msg.source_id))
@@ -454,11 +587,11 @@ def zone_heat_demand(msg):
             elif msg.is_broadcast(): # the zone_id refers to the UFH controller zone, and not the main evohome controller zone
                 # zone_id in this refers to the ufh zone id, and so zone_name etc need to be corrected
                 zone_name = "UFH Sub-Zone Id {}".format(ufh_zone_id)
-                for d in devices:
-                    if 'ufh_zoneId' in devices[d] and devices[d]['ufh_zoneId'] == ufh_zone_id:
+                for d in gcfg.devices:
+                    if 'ufh_zoneId' in gcfg.devices[d] and gcfg.devices[d]['ufh_zoneId'] == ufh_zone_id:
                         # display_and_log("DEBUG","UFH Zone matched to " + devices[d]["name"])
-                        zone_id = devices[d]["zoneId"] #
-                        zone_name = devices[d]["name"]
+                        zone_id = gcfg.devices[d]["zoneId"] #
+                        zone_name = gcfg.devices[d]["name"]
                         zone_name_parts = zone_name.split(' ', 1)
                         device_type = "UFH {}".format(zone_name_parts[1]) if len(zone_name_parts) > 1 else "UFH {}".format(zone_name)
                         topic = "{}/{}".format(zone_name, msg.source_name)
@@ -674,8 +807,8 @@ def fault_log(msg):
 
     dev_id_int = int(msg.payload[38:40],16) << 16 | int(msg.payload[40:42],16) << 8 | int(msg.payload[42:44],16)
     dev_id = "{:02}:{:06}".format((dev_id_int >> 18) & 0X3F, dev_id_int & 0x3FFFF)
-    if dev_id in devices:
-      device_name = devices[dev_id]["name"]
+    if dev_id in gcfg.devices:
+      device_name = gcfg.devices[dev_id]["name"]
     else:
       device_name = dev_id
 
@@ -734,7 +867,7 @@ def battery_info(msg):
     device_id = int(msg.payload[0:2],16)
     battery = int(msg.payload[2:4],16)
     lowBattery = int(msg.payload[4:5],16)
-    zone_id = devices[msg.source]["zoneId"]
+    zone_id = gcfg.devices[msg.source]["zoneId"]
 
     if battery == 0xFF:
         battery = 100 # recode full battery (0xFF) to 100 for consistency across device types
@@ -762,7 +895,7 @@ def opentherm_msg(msg):
   msg_type = OPENTHERM_MSG_TYPES[msg_type_id] if OPENTHERM_MSG_TYPES[msg_type_id] else msg_type_id
   data_id = int(msg.payload[4:6], 16)                       # OT command ID
   data_value = msg.payload[6:10]                            # Command response value
-  zone_id = devices[msg.source]["zoneId"]
+  zone_id = gcfg.devices[msg.source]["zoneId"]
 
   if not int(msg.payload[2:4], 16) // 0x80 == parity(int(msg.payload[2:], 16) & 0x7FFFFFFF):      
     display_data_row(msg, "Parity error. Msg type_id: {} ({}) id: {}, value: {}".format(msg_type_id, msg_type, data_id, data_value))

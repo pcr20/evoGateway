@@ -79,8 +79,13 @@ import evo_gateway.globalcfg as gcfg #for eventfile and logfile
 
 from evo_gateway.general import rotate_files
 from evo_gateway.general import display_and_log
+from evo_gateway.general import log
 from evo_gateway.general import init_com_ports
+
 from evo_gateway.mqtt import initialise_mqtt_client
+
+from evo_gateway.app import get_message_from_data
+from evo_gateway.app import process_received_message
 
 # --- Main
 rotate_files(LOG_FILE)
@@ -105,27 +110,27 @@ gcfg.logfile.write("-----------------------------------------------------------\
 
 if os.path.isfile(DEVICES_FILE):
   with open(DEVICES_FILE, 'r') as fp:
-    devices = json.load(fp)             # Get a list of known devices, ideally with their zone details etc
+    gcfg.devices = json.load(fp)             # Get a list of known devices, ideally with their zone details etc
 else:
-  devices = {}
+  gcfg.devices = {}
 # Add this server/gateway as a device, but using dummy zone ID for now
-devices[THIS_GATEWAY_ID] = { "name" : THIS_GATEWAY_NAME, "zoneId": 240, "zoneMaster": True }
+gcfg.devices[THIS_GATEWAY_ID] = { "name" : THIS_GATEWAY_NAME, "zoneId": 240, "zoneMaster": True }
 
 zones = {}                            # Create a seperate collection of Zones, so that we can look up zone names quickly
 gcfg.send_queue = []
 send_queue_size_displayed = 0         # Used to track if we've shown the queue size recently or not
 
-for d in devices:
-  if devices[d]['zoneMaster']:
-    zones[devices[d]["zoneId"]] = devices[d]["name"]
+for d in gcfg.devices:
+  if gcfg.devices[d]['zoneMaster']:
+    zones[gcfg.devices[d]["zoneId"]] = gcfg.devices[d]["name"]
   # generate the mqtt topic for the device (using Homie convention)
 
 display_and_log('','')
 display_and_log('','-----------------------------------------------------------')
 display_and_log('',"Devices loaded from '" + DEVICES_FILE + "' file:")
-for key in sorted(devices):
-  zm = " [Master]" if devices[key]['zoneMaster'] else ""
-  display_and_log('','   ' + key + " - " + '{0: <22}'.format(devices[key]['name']) + " - Zone " + '{0: <3}'.format(devices[key]["zoneId"]) + zm )
+for key in sorted(gcfg.devices):
+  zm = " [Master]" if gcfg.devices[key]['zoneMaster'] else ""
+  display_and_log('','   ' + key + " - " + '{0: <22}'.format(gcfg.devices[key]['name']) + " - Zone " + '{0: <3}'.format(gcfg.devices[key]["zoneId"]) + zm )
 
 display_and_log('','-----------------------------------------------------------')
 display_and_log('','')
@@ -141,8 +146,7 @@ else:
   mqtt_client = None
 
 prev_data_had_errors = False
-data_pattern = re.compile("^--- ( I| W|RQ|RP) --- (--:------ |\d{2}:\d{6} ){3}[0-9a-fA-F]{4} \d{3}")
-data_pattern_with_rssi = re.compile("^--- \d{3} ( I| W|RQ|RP) --- (--:------ |\d{2}:\d{6} ){3}[0-9a-fA-F]{4} \d{3}")
+
 
 data_row_stack = deque()
 gcfg.last_sent_command = None
@@ -177,7 +181,7 @@ while ports_open:
         if serial_port.any() > 0:
           data_row = str(serial_port.readline().strip(), "utf-8")
           if data_row:
-            msg = get_message_from_data(data_row, serial_port.tag)
+            msg = get_message_from_data(data_row)
             stack_entry = msg.get_raw_msg_with_ts() if msg else None
             is_duplicate = stack_entry and stack_entry in data_row_stack
             # Make sure it is not a duplicate message (e.g. received through additional listener/gateway devices)
@@ -193,27 +197,27 @@ while ports_open:
                   #gcfg.last_sent_command.send_acknowledged_dtm = datetime.datetime.now()
                   gcfg.last_sent_command.send_acknowledged_dtm = time.gmtime()
                   display_and_log("COMMAND_OUT","{} {} Command ACKNOWLEDGED".format(gcfg.last_sent_command.command_name.upper(),
-                    gcfg.last_sent_command.arg_desc if gcfg.last_sent_command.arg_desc != "[]" else ":"), serial_port.tag)
+                    gcfg.last_sent_command.arg_desc if gcfg.last_sent_command.arg_desc != "[]" else ":"))
                 prev_data_had_errors = False
               else:
                   if not prev_data_had_errors and LOG_DROPPED_PACKETS:
                       prev_data_had_errors = True
-                      display_and_log("ERROR","--- Message dropped: packet error from hardware/firmware", serial_port.tag)
-                  log("{: <17}{} {}".format("", "^" if is_duplicate else " " , data_row), serial_port.tag)
+                      display_and_log("ERROR","--- Message dropped: packet error from hardware/firmware")
+                  log("{: <17}{} {}".format("", "^" if is_duplicate else " " , data_row))
               gcfg.logfile.flush()
               data_row_stack.append(stack_entry)
               if len(data_row_stack) > MAX_HISTORY_STACK_LENGTH:
                 data_row_stack.popleft()
             else: # Log msg anyway
-              log("{: <17}{} {}".format("ERR: INVALID MSG" if not msg else "", "^" if is_duplicate else " " , data_row), serial_port.tag)
+              log("{: <17}{} {}".format("ERR: INVALID MSG" if not msg else "", "^" if is_duplicate else " " , data_row))
 
       time.sleep(0.01)
     ports_open = any(port["connection"] for port_id, port in list(serial_ports.items()))
   except KeyboardInterrupt:
     for port_id, port in serial_ports.items():
       if port["connection"]:
-        print("Closing port '{}'".format(port["connection"].port))
-        port["connection"].close()
+        print("Closing port '{}'".format(port["connection"]))
+        port["connection"].deinit()
   except Exception as e:
     display_and_log("ERROR "+__file__, "Other exception occured")
     sys.print_exception(e)

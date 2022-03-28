@@ -201,7 +201,8 @@ def init_com_ports():
               assert ('uname' in dir(uos) and uos.uname()[0]=='esp32'),"Not ESP32, no serial port support"
               from machine import UART
               baudrate = params["baud"] if "baud" in params else 115200
-              serial_port = UART(int(port),baudrate=baudrate,tx=params["tx_pin"],rx=params["rx_pin"])
+              #set timeout to make .read() and .readline() block
+              serial_port = UART(int(port),baudrate=baudrate,tx=params["tx_pin"],rx=params["rx_pin"],timeout=1000)
               break
           else:
               serial_port=FakeSerial()
