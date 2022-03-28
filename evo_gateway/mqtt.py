@@ -198,10 +198,10 @@ def get_command_from_mqtt_json(json_data):
 
 
 def mqtt_publish(device, command, msg, topic=None, auto_ts=True):
-  if not mqtt_client:
+  if not gcfg.mqtt_client:
     return
 
-  if not mqtt_client.is_connected:
+  if not gcfg.mqtt_client.is_connected:
     display_and_log(SYSTEM_MSG_TAG,"[WARN] MQTT publish failed as client is not connected to broker")
     return
 
@@ -211,9 +211,9 @@ def mqtt_publish(device, command, msg, topic=None, auto_ts=True):
       #timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%XZ")
       t = time.gmtime()
       timestamp = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(t[0], t[1], t[2], t[3], t[4], t[5])
-      mqtt_client.publish(topic, msg, 0, True)
+      gcfg.mqtt_client.publish(topic, msg, 0, True)
       if auto_ts:
-        mqtt_client.publish("{}{}".format(topic,"_ts"), timestamp, 0, True)
+        gcfg.mqtt_client.publish("{}{}".format(topic,"_ts"), timestamp, 0, True)
       # print("published to mqtt topic {}: {}".format(topic, msg))
   except Exception as e:
       print(str(e))

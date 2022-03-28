@@ -83,6 +83,7 @@ from evo_gateway.general import log
 from evo_gateway.general import init_com_ports
 
 from evo_gateway.mqtt import initialise_mqtt_client
+from evo_gateway.mqtt import mqtt_publish
 
 from evo_gateway.app import get_message_from_data
 from evo_gateway.app import process_received_message
@@ -116,13 +117,13 @@ else:
 # Add this server/gateway as a device, but using dummy zone ID for now
 gcfg.devices[THIS_GATEWAY_ID] = { "name" : THIS_GATEWAY_NAME, "zoneId": 240, "zoneMaster": True }
 
-zones = {}                            # Create a seperate collection of Zones, so that we can look up zone names quickly
+gcfg.zones = {}                            # Create a seperate collection of Zones, so that we can look up zone names quickly
 gcfg.send_queue = []
 send_queue_size_displayed = 0         # Used to track if we've shown the queue size recently or not
 
 for d in gcfg.devices:
   if gcfg.devices[d]['zoneMaster']:
-    zones[gcfg.devices[d]["zoneId"]] = gcfg.devices[d]["name"]
+    gcfg.zones[gcfg.devices[d]["zoneId"]] = gcfg.devices[d]["name"]
   # generate the mqtt topic for the device (using Homie convention)
 
 display_and_log('','')
@@ -140,10 +141,10 @@ gcfg.logfile.flush()
 
 # init MQTT
 if MQTT_SERVER:
-  mqtt_client = MQTTClient_threaded(MQTT_CLIENTID, MQTT_SERVER)
-  initialise_mqtt_client(mqtt_client)
+  gcfg.mqtt_client = MQTTClient_threaded(MQTT_CLIENTID, MQTT_SERVER)
+  initialise_mqtt_client(gcfg.mqtt_client)
 else:
-  mqtt_client = None
+  gcfg.mqtt_client = None
 
 prev_data_had_errors = False
 
@@ -224,6 +225,6 @@ while ports_open:
 
     # comConnected = False
 
-if mqtt_client:
-  mqtt_client.loop_stop()
+if gcfg.mqtt_client:
+  gcfg.mqtt_client.loop_stop()
 print("Session ended\n")

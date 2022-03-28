@@ -54,6 +54,7 @@ from collections import namedtuple, deque
 from .config import *
 from .general import *
 import evo_gateway.globalcfg as gcfg
+from evo_gateway.mqtt import mqtt_publish
 
 #from evo_gateway.general import log
 
@@ -220,7 +221,7 @@ def init_homie():
         device_name = to_snake(device["name"]).lower().replace("_","-")
 
         zone_id = device["zoneId"]
-        zone_name = zones[zone_id]         # if 1 <= zone_id <= 12 else str(zone_id)
+        zone_name = gcfg.zones[zone_id]         # if 1 <= zone_id <= 12 else str(zone_id)
 
         node_name = "{}-{}-{}".format(DEVICE_TYPE[device_type].lower(), device_name, device_id.replace(":","-"))
         nodes_list.append(node_name)
@@ -338,7 +339,7 @@ def get_zone_details(payload, source_type=None):
   zone_id = int(payload[0:2],16)
   if zone_id < 12:
     zone_id += 1
-    zone_name = zones[zone_id] if zone_id in zones else "Zone {}".format(zone_id)
+    zone_name = gcfg.zones[zone_id] if zone_id in gcfg.zones else "Zone {}".format(zone_id)
     topic = zone_name
   else:
     # if zone_id == DEVICE_TYPE['UFH']:
@@ -436,7 +437,7 @@ def setpoint(msg):
     while (i < payload_string_length):
         zone_data = msg.payload[i:i+6]
         zone_id = int(zone_data[0:2],16) + 1 #Zone number
-        zone_name = zones[zone_id] if zone_id in zones else "Zone {}".format(zone_id)
+        zone_name = gcfg.zones[zone_id] if zone_id in gcfg.zones else "Zone {}".format(zone_id)
 
         # display_and_log("DEBUG","Setpoint: zone not found for zone_id " + str(zone_id) + ", MSG: " + msg.rawmsg)
         zone_setpoint = convert_from_twos_comp(zone_data[2:6]) #float(int(zone_data[2:4],16) << 8 | int(zone_data [4:6],16))/100
@@ -508,7 +509,7 @@ def zone_temperature(msg):
     else:
       zoneDesc = ""
     display_data_row(msg, "{:5.2f}°C".format(temperature), zone_id)
-    mqtt_publish("{}/{}".format(zones[zone_id], msg.source_name), "temperature",temperature)
+    mqtt_publish("{}/{}".format(gcfg.zones[zone_id], msg.source_name), "temperature",temperature)
 
     i += 6
 
@@ -534,7 +535,7 @@ def window_status(msg):
   else:
         miscDesc = ""
   display_data_row(msg, "{:>7}".format(status), zone_id)
-  mqtt_publish("{}/{}".format(zones[zone_id], msg.source_name),"window_status",status)
+  mqtt_publish("{}/{}".format(gcfg.zones[zone_id], msg.source_name),"window_status",status)
 
 
 def other_command(msg):
@@ -880,7 +881,7 @@ def battery_info(msg):
         suffix = "(device ID {})".format(device_id)
 
     display_data_row(msg, "{:.1f}%".format(battery), zone_id, suffix)
-    topic = "dhw" if zone_id == 250 else zones[zone_id]
+    topic = "dhw" if zone_id == 250 else gcfg.zones[zone_id]
     mqtt_publish("{}/{}".format(topic, msg.source_name), "battery", battery)
 
 
@@ -1091,9 +1092,9 @@ def process_send_command(command):
           if command.send_mode is None:
               command.send_mode = "W"
           if until:
-            command.arg_desc = "['{}': {} degC until {}]".format(zones[zone_id] if zone_id in zones else zone_id, setpoint, until)
+            command.arg_desc = "['{}': {} degC until {}]".format(gcfg.zones[zone_id] if zone_id in gcfg.zones else zone_id, setpoint, until)
           else:
-            command.arg_desc = command.arg_desc = "['{}': {} deg C]".format(zones[zone_id] if zone_id in zones else zone_id, setpoint)
+            command.arg_desc = command.arg_desc = "['{}': {} deg C]".format(gcfg.zones[zone_id] if zone_id in gcfg.zones else zone_id, setpoint)
       else:
         if not command.send_mode: # default to RQ
           command.send_mode = "RQ"
