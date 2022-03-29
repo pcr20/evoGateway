@@ -88,6 +88,7 @@ EVENTS_FILE       = getConfig(config,"Files", "EVENTS_FILE", "events.log")
 LOG_FILE          = getConfig(config,"Files", "LOG_FILE", "evogateway.log")
 DEVICES_FILE      = getConfig(config,"Files", "DEVICES_FILE", "devices.json")
 NEW_DEVICES_FILE  = getConfig(config,"Files", "NEW_DEVICES_FILE", "devices_new.json")
+MAX_FILE_SIZE  = getConfig(config,"Files", "MAX_FILE_SIZE", 15000)
 
 LOG_DROPPED_PACKETS = getConfig(config,"Other", "LOG_DROPPED_PACKETS", "False").lower() == "true"
 DROP_DUPLICATE_MESSAGES = getConfig(config,"Other", "DROP_DUPLICATE_MESSAGES", "True").lower() == "true"
@@ -121,36 +122,3 @@ CANCEL_SEND_COMMANDS ="cancel_commands"
 
 SYSTEM_MSG_TAG = "*"
 #----------------------------------------
-class TwoWayDict(dict):
-    def __len__(self):
-        return super().__len__() / 2
-    def __setitem__(self, key, value):
-        super().__setitem__( key, value)
-        super().__setitem__( value, key)
-
-DEVICE_TYPE = TwoWayDict()
-DEVICE_TYPE["01"] = "CTL"  # Main evohome touchscreen controller
-DEVICE_TYPE["02"] = "UFH"  # Underfloor controller, HCC80R or HCE80
-DEVICE_TYPE["03"] = "STAT" # Wireless thermostat -  HCW82
-DEVICE_TYPE["04"] = "TRV"  # Radiator TRVs, e.g. HR92
-DEVICE_TYPE["07"] = "DHW"  # Hotwater wireless Sender
-DEVICE_TYPE["10"] = "OTB"  # OpenTherm Bridge
-DEVICE_TYPE["18"] = "CUL"  # This fake HGI80
-DEVICE_TYPE["19"] = "CUL"  # Also fake HGI80 - used by evofw2?
-DEVICE_TYPE["13"] = "BDR"  # BDR relays
-DEVICE_TYPE["30"] = "GWAY" # Mobile Gateway such as RGS100
-DEVICE_TYPE["34"] = "STAT" # Wireless round thermostats T87RF2033 or part of Y87RF2024 
-
-OPENTHERM_MSG_TYPES = {
-      0: "Read-Data",       # 0b.000....
-     16: "Write-Data",      # 0b.001....
-     32: "Invalid-Data",    # 0b.010....
-     48: "-reserved-",      # 0b.011....
-     64: "Read-Ack",        # 0b.100....
-     80: "Write-Ack",       # 0b.101....
-     96: "Data-Invalid",    # 0b.110....
-    112: "Unknown-DataId",  # 0b.111....
-}
-
-CONTROLLER_MODES = {0: "Auto", 1: "Heating Off", 2: "Eco-Auto", 3: "Away", 4: "Day Off", 7:"Custom"} # 0=auto, 1= off, 2=eco, 4 = day off, 7 = custom
-

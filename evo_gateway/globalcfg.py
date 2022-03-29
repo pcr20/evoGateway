@@ -5,4 +5,5 @@ send_queue=None
 last_sent_command=None
 mqtt_client=None
 devices= {}
-zones = {} 
+zones = {}
+zones_list = {}

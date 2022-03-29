@@ -72,6 +72,7 @@ from evo_gateway.config import THIS_GATEWAY_ID
 from evo_gateway.config import THIS_GATEWAY_NAME
 from evo_gateway.config import MAX_HISTORY_STACK_LENGTH
 
+
 from evo_gateway.config import MQTT_SERVER
 from evo_gateway.config import MQTT_CLIENTID
 
