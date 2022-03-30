@@ -125,7 +125,7 @@ def display_and_log(source="-", display_message="", port_tag=None, rssi=None):
         gcfg.eventfile.write(row + "\n")
         gcfg.eventfile.flush()
     except Exception as e:
-        print("display_and_log", __file__, str(e))
+        sys.print_exception(e)
 
 
 def log(logentry, port_tag="-"):
@@ -172,13 +172,16 @@ def init_com_ports():
                         serial_port = FakeSerial()
 
                 except Exception as e:
+                    fio = io.StringIO()
+                    sys.print_exception(e, fio)
+                    fio.seek(0)
                     if limit > 1:
-                        display_and_log("COM_PORT ERROR", repr(e) + ". Retrying in 5 seconds")
+                        display_and_log("COM_PORT ERROR", repr(e) + ". Retrying in 5 seconds" + fio.read())
                         time.sleep(5)
                         limit -= 1
                     else:
                         display_and_log("COM_PORT ERROR",
-                                        "Error connecting to COM port {}. Giving up...".format(params["com_port"]))
+                                        "Error connecting to COM port {}. Giving up... {}".format(params["com_port"], fio.read()))
 
             if serial_port is not None:
                 # serial_port.tag = count

@@ -67,6 +67,7 @@ import evo_gateway.globalcfg as gcfg
 
 from evo_gateway.general import display_and_log
 from evo_gateway.general import log
+from evo_gateway.general import to_snake
 
 import _thread
 
@@ -83,7 +84,8 @@ class MQTTClient_threaded(MQTTClient):
 
     def _mainloop(self):
         while True:
-            self.wait_msg()
+            self.check_msg() #wait_message blocks the socket to send is also blocked
+            time.sleep(0.1)
 
     def loop_start(self):
         self.thread_id = _thread.start_new_thread(self._mainloop, tuple())
@@ -124,7 +126,7 @@ def initialise_mqtt_client(mqtt_client):
         display_and_log("ERROR",
                         "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), fio.read(), mqtt_client,
                                                                                     "data", "port_tag"))
-        sys.print_exception(e)
+        #sys.print_exception(e)
         # print(traceback.format_exc())
         return None
 
@@ -145,7 +147,7 @@ def mqtt_on_connect(mqtt_client, userdata, flags, rc):
                             "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e), fio.read(), mqtt_client,
                                                                                         userdata, "port_tag"))
             # print(traceback.format_exc())
-            sys.print_exception(e)
+            #sys.print_exception(e)
             return None
     else:
         mqtt_client.is_connected = False
@@ -172,9 +174,8 @@ def mqtt_on_message(topic, msg):
         json_data = json.loads(str(msg, "utf-8"))
         #print(json_data)
         log("{: <18} {}".format("MQTT_SUB", json_data))
-        print(SYS_CONFIG_COMMAND in json_data)
+
         if SYS_CONFIG_COMMAND in json_data:
-            print(json_data[SYS_CONFIG_COMMAND] == "zones")
             if json_data[SYS_CONFIG_COMMAND] in RESET_COM_PORTS:
                 new_command = get_reset_serialports_command()
                 new_command.instruction = json.dumps(json_data)
@@ -184,11 +185,8 @@ def mqtt_on_message(topic, msg):
                 display_and_log(SYSTEM_MSG_TAG, "Cancelled all queued outbound commands")
                 return
             elif json_data[SYS_CONFIG_COMMAND] == "zones":
-                print(json_data[SYS_CONFIG_COMMAND] == "zones")
-                print("zones_list: {} zones: {}".format(json.dumps(gcfg.zones_list, gcfg.zones)))
                 display_and_log(SYSTEM_MSG_TAG,
-                                "zones_list: {} zones: {}".format(json.dumps(gcfg.zones_list, gcfg.zones)))
-                print("zones_list: {} zones: {}".format(json.dumps(gcfg.zones_list, gcfg.zones)))
+                                "zones_list: {} zones: {}".format(json.dumps(gcfg.zones_list), json.dumps(gcfg.zones)))
             else:
                 display_and_log(SYSTEM_MSG_TAG, "System configuration command '{}' not recognised".format(
                     json_data[SYS_CONFIG_COMMAND]))
@@ -199,6 +197,7 @@ def mqtt_on_message(topic, msg):
         gcfg.send_queue.append(new_command)
     except Exception as e:
         log("{: <18} {} msg: {}".format("MQTT_SUB", e, msg))
+        sys.print_exception(e)
         return
 
 
@@ -233,17 +232,27 @@ def mqtt_publish(device, command, msg, topic=None, auto_ts=True):
         return
 
     try:
-        if not topic:
+        assert isinstance(msg, str), "msg is type {}".format(type(msg))
+        if topic:
+            topic = "{}/".format(MQTT_PUB_TOPIC) + str(topic)
+        else:
             topic = "{}/{}/{}".format(MQTT_PUB_TOPIC, to_snake(device), command.strip())
+
         # timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%dT%XZ")
         t = time.gmtime()
         timestamp = "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(t[0], t[1], t[2], t[3], t[4], t[5])
-        gcfg.mqtt_client.publish(topic, msg, 0, True)
+        #paho-mqtt:
+        #publish(self, topic, payload=None, qos=0, retain=False, properties=None):
+        #mqtt.simple
+        #publish(self, topic, msg, retain=False, qos=0):
+
+        gcfg.mqtt_client.publish(topic, msg, retain=True,qos=0)
         if auto_ts:
-            gcfg.mqtt_client.publish("{}{}".format(topic, "_ts"), timestamp, 0, True)
+            gcfg.mqtt_client.publish("{}{}".format(topic, "_ts"), timestamp,  retain=True,qos=0)
+
         # print("published to mqtt topic {}: {}".format(topic, msg))
     except Exception as e:
-        print(str(e))
+        sys.print_exception(e)
         pass
 
 

@@ -51,7 +51,6 @@ import json
 import re
 from collections import namedtuple, deque
 
-
 from evo_gateway.config import THIS_GATEWAY_TYPE_ID
 from evo_gateway.config import THIS_GATEWAY_NAME
 from evo_gateway.config import EMPTY_DEVICE_ID
@@ -68,28 +67,26 @@ import evo_gateway.globalcfg as gcfg
 from evo_gateway.mqtt import mqtt_publish
 
 
-
-
-
 def get_dtm_from_packed_hex(dtm_hex):
-  dtm_mins = int(dtm_hex[0:2],16)
-  dtm_hours = int(dtm_hex[2:4],16)
-  dtm_day = int(dtm_hex[4:6],16)
-  dtm_month = int(dtm_hex[6:8],16)
-  dtm_year = int(dtm_hex[8:12],16)
-  #return datetime.datetime(year=dtm_year,month=dtm_month, day=dtm_day,hour=dtm_hours,minute=dtm_mins)
-  return (dtm_year,dtm_month,dtm_day,dtm_hours,dtm_mins,0)
+    dtm_mins = int(dtm_hex[0:2], 16)
+    dtm_hours = int(dtm_hex[2:4], 16)
+    dtm_day = int(dtm_hex[4:6], 16)
+    dtm_month = int(dtm_hex[6:8], 16)
+    dtm_year = int(dtm_hex[8:12], 16)
+    # return datetime.datetime(year=dtm_year,month=dtm_month, day=dtm_day,hour=dtm_hours,minute=dtm_mins)
+    return (dtm_year, dtm_month, dtm_day, dtm_hours, dtm_mins, 0)
 
 
 def display_data_row(msg, display_text, ref_zone=-1, suffix_text=""):
-  destination = "BROADCAST MESSAGE" if msg.is_broadcast() else msg.destination_name
-  if ref_zone > -1:
-    zone_name = "@ {:<20}".format(gcfg.zones[ref_zone]) if ref_zone in gcfg.zones else "                      "
-    display_row = "{:<2}| {:<22} -> {:<22} | {:>5} {:<25} [Zone {:<3}] {}".format(
-        msg.msg_type, msg.source_name, destination, display_text, zone_name, ref_zone, suffix_text)
-  else:
-    display_row = "{:<2}| {:<22} -> {:<22} | {:>5} {}".format(msg.msg_type, msg.source_name, destination, display_text, suffix_text)
-  display_and_log(msg.command_name, display_row, msg.port, msg.rssi)
+    destination = "BROADCAST MESSAGE" if msg.is_broadcast() else msg.destination_name
+    if ref_zone > -1:
+        zone_name = "@ {:<20}".format(gcfg.zones[ref_zone]) if ref_zone in gcfg.zones else "                      "
+        display_row = "{:<2}| {:<22} -> {:<22} | {:>5} {:<25} [Zone {:<3}] {}".format(
+            msg.msg_type, msg.source_name, destination, display_text, zone_name, ref_zone, suffix_text)
+    else:
+        display_row = "{:<2}| {:<22} -> {:<22} | {:>5} {}".format(msg.msg_type, msg.source_name, destination,
+                                                                  display_text, suffix_text)
+    display_and_log(msg.command_name, display_row, msg.port, msg.rssi)
 
 
 def parity(x):
@@ -101,53 +98,52 @@ def parity(x):
 
 
 def convert_from_twos_comp(hex_val, divisor=100):
-  """ Converts hex string of 2's complement """
-  try:
-    val = float(int(hex_val[0:2],16) << 8 | int(hex_val[2:4],16))/divisor
-    return val
-  except Exception as e:
-    display_and_log("ERROR","Two's complement error {}. hex_val argument: {}".format(e, hex_val))
-
-
-
-
-
-
+    """ Converts hex string of 2's complement """
+    try:
+        val = float(int(hex_val[0:2], 16) << 8 | int(hex_val[2:4], 16)) / divisor
+        return val
+    except Exception as e:
+        fio = io.StringIO()
+        sys.print_exception(e, fio)
+        fio.seek(0)
+        display_and_log("ERROR", "Two's complement error {}. hex_val argument: {} {}".format(e, hex_val,fio.read()))
 
 
 class TwoWayDict(dict):
     def __len__(self):
         return super().__len__() / 2
+
     def __setitem__(self, key, value):
-        super().__setitem__( key, value)
-        super().__setitem__( value, key)
+        super().__setitem__(key, value)
+        super().__setitem__(value, key)
+
 
 DEVICE_TYPE = TwoWayDict()
 DEVICE_TYPE["01"] = "CTL"  # Main evohome touchscreen controller
 DEVICE_TYPE["02"] = "UFH"  # Underfloor controller, HCC80R or HCE80
-DEVICE_TYPE["03"] = "STAT" # Wireless thermostat -  HCW82
+DEVICE_TYPE["03"] = "STAT"  # Wireless thermostat -  HCW82
 DEVICE_TYPE["04"] = "TRV"  # Radiator TRVs, e.g. HR92
 DEVICE_TYPE["07"] = "DHW"  # Hotwater wireless Sender
 DEVICE_TYPE["10"] = "OTB"  # OpenTherm Bridge
 DEVICE_TYPE["18"] = "CUL"  # This fake HGI80
 DEVICE_TYPE["19"] = "CUL"  # Also fake HGI80 - used by evofw2?
 DEVICE_TYPE["13"] = "BDR"  # BDR relays
-DEVICE_TYPE["30"] = "GWAY" # Mobile Gateway such as RGS100
-DEVICE_TYPE["34"] = "STAT" # Wireless round thermostats T87RF2033 or part of Y87RF2024
+DEVICE_TYPE["30"] = "GWAY"  # Mobile Gateway such as RGS100
+DEVICE_TYPE["34"] = "STAT"  # Wireless round thermostats T87RF2033 or part of Y87RF2024
 
 OPENTHERM_MSG_TYPES = {
-      0: "Read-Data",       # 0b.000....
-     16: "Write-Data",      # 0b.001....
-     32: "Invalid-Data",    # 0b.010....
-     48: "-reserved-",      # 0b.011....
-     64: "Read-Ack",        # 0b.100....
-     80: "Write-Ack",       # 0b.101....
-     96: "Data-Invalid",    # 0b.110....
+    0: "Read-Data",  # 0b.000....
+    16: "Write-Data",  # 0b.001....
+    32: "Invalid-Data",  # 0b.010....
+    48: "-reserved-",  # 0b.011....
+    64: "Read-Ack",  # 0b.100....
+    80: "Write-Ack",  # 0b.101....
+    96: "Data-Invalid",  # 0b.110....
     112: "Unknown-DataId",  # 0b.111....
 }
 
-CONTROLLER_MODES = {0: "Auto", 1: "Heating Off", 2: "Eco-Auto", 3: "Away", 4: "Day Off", 7:"Custom"} # 0=auto, 1= off, 2=eco, 4 = day off, 7 = custom
-
+CONTROLLER_MODES = {0: "Auto", 1: "Heating Off", 2: "Eco-Auto", 3: "Away", 4: "Day Off",
+                    7: "Custom"}  # 0=auto, 1= off, 2=eco, 4 = day off, 7 = custom
 
 
 # --- Classes
@@ -383,7 +379,7 @@ def get_message_from_data(data, port_tag=None):
     ''' Convert the received raw data into a Message object  '''
     if not (
             "Invalid Manchester" in data or "Collision" in data or "Truncated" in data or "_ENC" in data or "_BAD" in data or "BAD_" in data or "ERR" in data) and len(
-            data) > 40:  # Make sure no obvious errors in getting the data....
+        data) > 40:  # Make sure no obvious errors in getting the data....
         if not data.startswith("---"):
             # Some echos of commands sent by us seem to come back without the --- prefix. Noticed on the fifo firmware that sometimes the request type prefix seems to be messed up. Workaround for this...
             if data.strip().startswith("W---"):
@@ -427,8 +423,8 @@ def process_received_message(msg):
             COMMANDS[msg.command_code](msg)
             log('{: <18} {}'.format(msg.command_name, msg.rawmsg), msg.port)
         except Exception as e:
-            fio=io.StringIO()
-            sys.print_exception(e,fio)
+            fio = io.StringIO()
+            sys.print_exception(e, fio)
             fio.seek(0)
             display_and_log("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e),
                                                                                                  fio.read(),
@@ -560,8 +556,8 @@ def setpoint(msg):
                 flag = ""
 
             display_data_row(msg, "{:5.2f}°C{}".format(zone_setpoint, flag), zone_id)
-            mqtt_publish(zone_name, "setpoint" + command_name_suffix, zone_setpoint)
-            mqtt_publish(zone_name, "zone_id", zone_id)
+            mqtt_publish(zone_name, "setpoint" + command_name_suffix, "{:5.2f}".format(zone_setpoint))
+            mqtt_publish(zone_name, "zone_id", "{}".format(zone_id))
             i += 6
 
 
@@ -627,11 +623,13 @@ def zone_temperature(msg):
             zoneDesc = " [Zone " + str(zone_id) + "]"
         else:
             zoneDesc = ""
-        #TODO REMOVE
-        display_data_row(msg,msg.rawmsg)
-        display_data_row(msg, "{:5.2f}°C".format(temperature), zone_id)
 
-        mqtt_publish("{}/{}".format(gcfg.zones[zone_id] if zone_id in gcfg.zones else zone_id, msg.source_name), "temperature", temperature)
+        if msg.msg_type != "RQ":
+            display_data_row(msg, "{:5.2f}°C".format(temperature), zone_id)
+            mqtt_publish("{}/{}".format(gcfg.zones[zone_id] if zone_id in gcfg.zones else zone_id, msg.source_name),
+                         "temperature", "{:5.2f}".format(temperature))
+        else:
+            display_data_row(msg, "msg_type: {}".format(msg.msg_type), zone_id)
 
         i += 6
 
@@ -664,7 +662,8 @@ def window_status(msg):
         else:
             miscDesc = ""
         display_data_row(msg, "{:>7}".format(status), zone_id)
-        mqtt_publish("{}/{}".format(gcfg.zones[zone_id] if zone_id in gcfg.zones else zone_id, msg.source_name), "window_status", status)
+        mqtt_publish("{}/{}".format(gcfg.zones[zone_id] if zone_id in gcfg.zones else zone_id, msg.source_name),
+                     "window_status", status)
 
 
 def other_command(msg):
@@ -707,8 +706,8 @@ def zone_heat_demand(msg):
             demand = int(msg.payload[2 + i:4 + i], 16)
 
             if not msg.source in gcfg.zones_list:
-                gcfg.zones_list[msg.source]={}
-            gcfg.zones_list[msg.source]["zone_id"]=zone_id
+                gcfg.zones_list[msg.source] = {}
+            gcfg.zones_list[msg.source]["zone_id"] = zone_id
             gcfg.zones_list[msg.source]["zone_name"] = zone_name
 
             # We use zone combined with device name for topic, as demand can be from individual trv
@@ -744,9 +743,8 @@ def zone_heat_demand(msg):
 
             demand_percentage = float(demand) / 200 * 100
             display_data_row(msg, "{:6.1f}%".format(demand_percentage), zone_id)
-
             if len(topic) > 0:
-                mqtt_publish(topic, "heat_demand", demand_percentage)
+                mqtt_publish(topic, "heat_demand", "{:6.1f}%".format(demand_percentage))
             else:
                 display_and_log("DEBUG", "ERROR: Could not post to MQTT as topic undefined")
             i += 4
@@ -937,20 +935,20 @@ def language(msg):
         assert msg.payload[:2] == "00", "Invalid payload '{}' (must start with '00')".format(msg.payload)
         assert msg.payload[8:] == "FF", "Invalid payload '{}' (must end with 'FF')".format(msg.payload)
         iso_code_ascii = msg.payload[2:6] if msg.payload[4:6] != "FF" else msg.payload[2:4]
-        b=bytearray([int(iso_code_ascii[n:n + 2], 16) for n in range(0, len(iso_code_ascii), 2)])
+        b = bytearray([int(iso_code_ascii[n:n + 2], 16) for n in range(0, len(iso_code_ascii), 2)])
         iso_code = b.decode("utf-8").replace("\x00", "").replace("\xff", "")
 
         display_data_row(msg, "{} ({})".format(iso_code, iso_code_ascii))
     except Exception as e:
-        fio=io.StringIO()
-        sys.print_exception(e,fio)
+        fio = io.StringIO()
+        sys.print_exception(e, fio)
         fio.seek(0)
         display_and_log("ERROR", "'{}' on line {} [Command {}, payload: '{}', port: {}]".format(str(e),
                                                                                                 fio.read(),
                                                                                                 msg.command_name,
                                                                                                 msg.payload, msg.port))
         # print(traceback.format_exc())
-        #sys.print_exception(e)
+        # sys.print_exception(e)
 
 
 def fault_log(msg):
@@ -1175,7 +1173,10 @@ def controller_mode(msg):
         try:
             mode = CONTROLLER_MODES[modeId]
         except:
-            mode = "Unknown (" + str(modeId) + ")"
+            fio=io.StringIO()
+            sys.print_exception(e,fio)
+            fio.seek(0)
+            mode = "Unknown (" + str(modeId) + ")"+fio.read()
         durationCode = int(msg.payload[14:16], 16)  # 0 = Permanent, 1 = temporary
 
         if durationCode == 1:
