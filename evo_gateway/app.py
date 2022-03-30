@@ -413,7 +413,7 @@ def process_received_message(msg):
         gcfg.devices.update({msg.source: {"name": msg.source, "zoneId": -1, "zoneMaster": False}})
         with open(NEW_DEVICES_FILE, 'w') as fp:
             # fp.write(json.dumps(gcfg.devices, sort_keys=True, indent=4))
-            fp.write(json.dumps(gcfg.devices))
+            json.dump(gcfg.devices,fp)
         fp.close()
 
     if msg.command_code in COMMANDS:
@@ -585,7 +585,7 @@ def setpoint_override(msg):
             mqtt_publish(topic, "mode", "Scheduled")
             mqtt_publish(topic, "mode_until", "")
         display_data_row(msg, "{:5.2f}°C".format(new_setpoint), zone_id, until)
-        mqtt_publish(topic, "setpointOverride", new_setpoint)
+        mqtt_publish(topic, "setpointOverride", "{:5.2f}".format(new_setpoint))
 
 
 def zone_temperature(msg):
@@ -689,7 +689,7 @@ def relay_heat_demand(msg):
 
         demand_percentage = float(demand) / 200 * 100
         display_data_row(msg, "{:>6.1f}% @ {}".format(demand_percentage, zone_name, "(type id: {})".format(type_id)))
-        mqtt_publish(topic, "heat_demand", demand_percentage)
+        mqtt_publish(topic, "heat_demand", "{:>6.1f}".format(demand_percentage))
 
 
 def zone_heat_demand(msg):

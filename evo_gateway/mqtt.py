@@ -187,6 +187,7 @@ def mqtt_on_message(topic, msg):
             elif json_data[SYS_CONFIG_COMMAND] == "zones":
                 display_and_log(SYSTEM_MSG_TAG,
                                 "zones_list: {} zones: {}".format(json.dumps(gcfg.zones_list), json.dumps(gcfg.zones)))
+                return
             else:
                 display_and_log(SYSTEM_MSG_TAG, "System configuration command '{}' not recognised".format(
                     json_data[SYS_CONFIG_COMMAND]))
