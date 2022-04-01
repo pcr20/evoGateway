@@ -185,8 +185,16 @@ def mqtt_on_message(topic, msg):
                 display_and_log(SYSTEM_MSG_TAG, "Cancelled all queued outbound commands")
                 return
             elif json_data[SYS_CONFIG_COMMAND] == "zones":
+                _s=json.dumps(gcfg.zones_list)
                 display_and_log(SYSTEM_MSG_TAG,
-                                "zones_list: {} zones: {}".format(json.dumps(gcfg.zones_list), json.dumps(gcfg.zones)))
+                                "zones_list: {} zones: {}".format(_s, json.dumps(gcfg.zones)))
+                mqtt_publish(SYS_CONFIG_COMMAND,json_data[SYS_CONFIG_COMMAND],_s)
+                return
+            elif json_data[SYS_CONFIG_COMMAND] == "devices":
+                _s=json.dumps(gcfg.devices)
+                display_and_log(SYSTEM_MSG_TAG,
+                                "devices: {}".format(_s))
+                mqtt_publish(SYS_CONFIG_COMMAND,json_data[SYS_CONFIG_COMMAND],_s)
                 return
             else:
                 display_and_log(SYSTEM_MSG_TAG, "System configuration command '{}' not recognised".format(

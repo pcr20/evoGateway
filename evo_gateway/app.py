@@ -65,7 +65,7 @@ from evo_gateway.general import to_snake
 
 import evo_gateway.globalcfg as gcfg
 from evo_gateway.mqtt import mqtt_publish
-
+from evo_gateway.app_helper import update_zone_details
 
 def get_dtm_from_packed_hex(dtm_hex):
     dtm_mins = int(dtm_hex[0:2], 16)
@@ -540,10 +540,12 @@ def setpoint(msg):
             zone_id = int(zone_data[0:2], 16) + 1  # Zone number
             zone_name = gcfg.zones[zone_id] if zone_id in gcfg.zones else "Zone {}".format(zone_id)
 
-            if not msg.source in gcfg.zones_list:
-                gcfg.zones_list[msg.source] = {}
-            gcfg.zones_list[msg.source]["zone_id"] = zone_id
-            gcfg.zones_list[msg.source]["zone_name"] = zone_name
+            #if not msg.source in gcfg.zones_list:
+            #    gcfg.zones_list[msg.source] = {}
+            #gcfg.zones_list[msg.source]["zone_id"] = zone_id
+            #gcfg.zones_list[msg.source]["zone_name"] = zone_name
+
+            update_zone_details(zone_data, msg, zones_info_inout=gcfg.zones_list, devices_inout=gcfg.devices)
 
             # display_and_log("DEBUG","Setpoint: zone not found for zone_id " + str(zone_id) + ", MSG: " + msg.rawmsg)
             zone_setpoint = convert_from_twos_comp(
@@ -609,7 +611,8 @@ def zone_temperature(msg):
         zone_data = msg.payload[i:i + 6]
 
         # If msg from controller, then get the zone_id from the data block. Otherwise use the zone_id of the msg sender
-        if msg.source_id == CONTROLLER_ID:
+        if msg.source_type == "01":
+        #if msg.source_id == CONTROLLER_ID:
             zone_id = int(zone_data[:2], 16) + 1
         elif gcfg.devices.get(msg.source_id):
             zone_id = gcfg.devices[msg.source_id]["zoneId"]
@@ -645,11 +648,12 @@ def window_status(msg):
         statusId = int(msg.payload[2:4], 16)
         misc = int(msg.payload[4:6], 16)
 
-        if not msg.source in gcfg.zones_list:
-            gcfg.zones_list[msg.source] = {}
-        gcfg.zones_list[msg.source]["zone_id"] = zone_id
-        gcfg.zones_list[msg.source]["zone_name"] = zone_name
+        #if not msg.source in gcfg.zones_list:
+        #    gcfg.zones_list[msg.source] = {}
+        #gcfg.zones_list[msg.source]["zone_id"] = zone_id
+        #gcfg.zones_list[msg.source]["zone_name"] = zone_name
 
+        update_zone_details(msg.payload[0:2], msg, zones_info_inout=gcfg.zones_list, devices_inout=gcfg.devices)
         if statusId == 0:
             status = "CLOSED"
         elif statusId == 0xC8:
@@ -705,10 +709,11 @@ def zone_heat_demand(msg):
             zone_id, zone_name, topic = get_zone_details(msg.payload[i:2 + i])
             demand = int(msg.payload[2 + i:4 + i], 16)
 
-            if not msg.source in gcfg.zones_list:
-                gcfg.zones_list[msg.source] = {}
-            gcfg.zones_list[msg.source]["zone_id"] = zone_id
-            gcfg.zones_list[msg.source]["zone_name"] = zone_name
+            #if not msg.source in gcfg.zones_list:
+            #    gcfg.zones_list[msg.source] = {}
+            #gcfg.zones_list[msg.source]["zone_id"] = zone_id
+            #gcfg.zones_list[msg.source]["zone_name"] = zone_name
+            update_zone_details(msg.payload[i:2 + i], msg, zones_info_inout=gcfg.zones_list, devices_inout=gcfg.devices)
 
             # We use zone combined with device name for topic, as demand can be from individual trv
             if zone_id <= 12:
