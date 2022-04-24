@@ -66,6 +66,7 @@ from evo_gateway.general import to_snake
 import evo_gateway.globalcfg as gcfg
 from evo_gateway.mqtt import mqtt_publish
 from evo_gateway.app_helper import update_zone_details
+from evo_gateway.app_helper import error_log
 
 def get_dtm_from_packed_hex(dtm_hex):
     dtm_mins = int(dtm_hex[0:2], 16)
@@ -106,7 +107,9 @@ def convert_from_twos_comp(hex_val, divisor=100):
         fio = io.StringIO()
         sys.print_exception(e, fio)
         fio.seek(0)
-        display_and_log("ERROR", "Two's complement error {}. hex_val argument: {} {}".format(e, hex_val,fio.read()))
+        errmsg="Two's complement error {}. hex_val argument: {} {}".format(e, hex_val,fio.read())
+        display_and_log("ERROR",errmsg)
+        error_log(display_message=errmsg)
 
 
 class TwoWayDict(dict):
@@ -196,8 +199,12 @@ class Message():
         try:
             self.payload_length = int(rawmsg[46 + offset: 49 + offset])  # Note this is not +HEX...
         except Exception as e:
-            print("Error instantiating Message class on line '{}':  {}. Raw msg: '{}'. length = {}".format(
-                "sys.exc_info not implemented", str(e), rawmsg, +len(rawmsg)))
+            fio = io.StringIO()
+            sys.print_exception(e, fio)
+            fio.seek(0)
+            errmsg="Error instantiating Message class: {} {}. Raw msg: '{}'. length = {}".format(str(e),fio.read(), rawmsg, +len(rawmsg))
+            print(errmsg)
+            error_log(display_message=errmsg)
             self.payload_length = 0
 
         self.payload = rawmsg[50 + offset:]
@@ -227,9 +234,13 @@ class Message():
                                                            gcfg.devices[self.destination][
                                                                'name'])  # Get the device's actual name if we have it
         except Exception as e:
-            print(
-                "Error initalising device names in Message class instantiation, on line '{}': {}. Raw msg: '{}'. length = {}".format(
-                    "sys.exc_info not implemented", str(e), self.rawmsg, len(self.rawmsg)))
+            fio = io.StringIO()
+            sys.print_exception(e, fio)
+            fio.seek(0)
+            errmsg="Error initalising device names in Message class instantiation, '{}': {}. Raw msg: '{}'. length = {}".format(
+                    str(e),fio.read(), self.rawmsg, len(self.rawmsg))
+            print(errmsg)
+            error_log(display_message=errmsg)
 
     def is_broadcast(self):
         return self.source == self.destination
@@ -426,10 +437,11 @@ def process_received_message(msg):
             fio = io.StringIO()
             sys.print_exception(e, fio)
             fio.seek(0)
-            display_and_log("ERROR", "'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e),
-                                                                                                 fio.read(),
+            errmsg="'{}' on line {} [Command {}, data: '{}', port: {}]".format(str(e),fio.read(),
                                                                                                  msg.command_name,
-                                                                                                 msg.rawmsg, msg.port))
+                                                                                                 msg.rawmsg, msg.port)
+            display_and_log("ERROR",errmsg)
+            error_log(display_message=errmsg)                                                                 
             # print(traceback.format_exc())
             return None
         return msg
@@ -887,7 +899,7 @@ def dhw_temperature(msg):
 
     temperature = float(int(msg.payload[2:6], 16)) / 100
     display_data_row(msg, "{:5.2f}°C".format(temperature))
-    mqtt_publish("DHW", "temperature", temperature)
+    mqtt_publish("DHW", "temperature", "{:5.2f}".format(temperature))
 
 
 def zone_info(msg):
@@ -948,10 +960,11 @@ def language(msg):
         fio = io.StringIO()
         sys.print_exception(e, fio)
         fio.seek(0)
-        display_and_log("ERROR", "'{}' on line {} [Command {}, payload: '{}', port: {}]".format(str(e),
-                                                                                                fio.read(),
-                                                                                                msg.command_name,
-                                                                                                msg.payload, msg.port))
+        errmsg="'{}' on line {} [Command {}, payload: '{}', port: {}]".format(str(e),fio.read(),
+                                                                               msg.command_name,
+                                                                               msg.payload, msg.port)
+        display_and_log("ERROR",errmsg)
+        error_log(display_message=errmsg)
         # print(traceback.format_exc())
         # sys.print_exception(e)
 
@@ -1165,7 +1178,7 @@ def boiler_setpoint(msg):
 
     setpoint = float(int(msg.payload[2:6], 16)) / 100
     display_data_row(msg, "Boiler setpoint: {}".format(setpoint))
-    mqtt_publish("Relays/{}".format(msg.source_name), "boiler_setpoint", setpoint)
+    mqtt_publish("Relays/{}".format(msg.source_name), "boiler_setpoint", "{:5.2f}".format(setpoint))
 
 
 def controller_mode(msg):

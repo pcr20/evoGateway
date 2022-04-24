@@ -221,8 +221,9 @@ while ports_open:
         print("Closing port '{}'".format(port["connection"]))
         port["connection"].deinit()
   except Exception as e:
-    display_and_log("ERROR "+__file__, "Other exception occured")
+    display_and_log("ERROR "+__file__, "Other exception occurred")
     sys.print_exception(e)
+    error_log(display_message=__file__+" Other exception occurred")
 
     # comConnected = False
 

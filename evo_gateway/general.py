@@ -63,6 +63,8 @@ from evo_gateway.config import COM_PORTS
 from evo_gateway.config import SYSTEM_MSG_TAG
 from evo_gateway.config import MAX_FILE_SIZE
 
+
+
 # --- General Functions
 def sig_handler(signum, frame):  # Trap Ctl C
     t = time.gmtime()
@@ -176,12 +178,13 @@ def init_com_ports():
                     sys.print_exception(e, fio)
                     fio.seek(0)
                     if limit > 1:
-                        display_and_log("COM_PORT ERROR", repr(e) + ". Retrying in 5 seconds" + fio.read())
+                        errmsg=repr(e) + ". Retrying in 5 seconds" + fio.read()
+                        display_and_log("COM_PORT ERROR", errmsg)
                         time.sleep(5)
                         limit -= 1
                     else:
-                        display_and_log("COM_PORT ERROR",
-                                        "Error connecting to COM port {}. Giving up... {}".format(params["com_port"], fio.read()))
+                        errmsg="Error connecting to COM port {}. Giving up... {}".format(params["com_port"], fio.read())
+                        display_and_log("COM_PORT ERROR",errmsg)
 
             if serial_port is not None:
                 # serial_port.tag = count

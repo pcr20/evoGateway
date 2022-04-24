@@ -69,6 +69,8 @@ from evo_gateway.general import display_and_log
 from evo_gateway.general import log
 from evo_gateway.general import to_snake
 
+
+
 import _thread
 
 
@@ -205,8 +207,10 @@ def mqtt_on_message(topic, msg):
 
         gcfg.send_queue.append(new_command)
     except Exception as e:
-        log("{: <18} {} msg: {}".format("MQTT_SUB", e, msg))
+        errmsg="{: <18} {} msg: {}".format("MQTT_SUB", e, msg)
+        log(errmsg)
         sys.print_exception(e)
+        error_log(display_message=errmsg)
         return
 
 
@@ -303,3 +307,5 @@ def mqtt_init_homeassistant():
     #     |- sent_command_ack_ts
     #     |- send_command_last_retry_ts
     pass
+
+    
