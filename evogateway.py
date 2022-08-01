@@ -57,8 +57,8 @@ from collections import namedtuple, deque
 #from enum import Enum, IntEnum
 import os.path
 
-if  os.path.isdir(sys.argv[0]):
-    os.chdir(os.path.dirname(sys.argv[0]))
+#if  os.path.isdir(sys.argv[0]):
+#    os.chdir(os.path.dirname(sys.argv[0]))
 
 
 import evo_gateway
@@ -90,6 +90,10 @@ from evo_gateway.app import get_message_from_data
 from evo_gateway.app import process_received_message
 
 # --- Main
+from machine import WDT
+wdt=WDT(timeout=(100*1000)) #100s
+wdt.feed()
+
 rotate_files(LOG_FILE)
 rotate_files(EVENTS_FILE)
 gcfg.logfile = open(LOG_FILE, "a")
@@ -215,6 +219,7 @@ while ports_open:
 
       time.sleep(0.01)
     ports_open = any(port["connection"] for port_id, port in list(serial_ports.items()))
+    wdt.feed()
   except KeyboardInterrupt:
     for port_id, port in serial_ports.items():
       if port["connection"]:
@@ -230,3 +235,4 @@ while ports_open:
 if gcfg.mqtt_client:
   gcfg.mqtt_client.loop_stop()
 print("Session ended\n")
+
